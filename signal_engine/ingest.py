@@ -162,6 +162,7 @@ def create_signal(
     status: str | None = None,
     created_by: str | None = None,
     detail_url: str | None = None,
+    timeline: str | None = None,
 ) -> Signal:
     cfg = get_config()
     confidence = clamp_confidence(confidence)
@@ -195,6 +196,7 @@ def create_signal(
         status=status,
         created_by=created_by or cfg.user_name,
         detail_url=detail_url,
+        timeline=timeline,
     )
     session.add(signal)
     session.flush()
@@ -378,6 +380,7 @@ def ingest_note(
                     detected_date=detected_date
                     or coerce_date(getattr(ps, "detected_date", None)),
                     product_fit=getattr(ps, "product_fit", None),
+                    timeline=getattr(ps, "timeline", None),
                     created_by=created_by,
                 )
             )

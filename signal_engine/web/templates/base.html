@@ -29,15 +29,6 @@
     <div class="flash {{ 'warn' if flash_kind == 'warn' }}">{{ flash }}</div>
   {% endif %}
 
-  {% if not llm_ready %}
-    <div class="banner">
-      <strong>No Anthropic API key detected.</strong>
-      Note parsing is off, so notes are saved raw and marked unparsed — nothing you
-      type is lost. Add <code>ANTHROPIC_API_KEY=…</code> to a <code>.env</code> file
-      next to <code>config.yaml</code>, restart, then re-parse from any company page.
-    </div>
-  {% endif %}
-
   {% block content %}{% endblock %}
 </main>
 </body>

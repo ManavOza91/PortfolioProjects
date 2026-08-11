@@ -168,6 +168,7 @@ CREATE TABLE signals (
 	raw_text TEXT, 
 	parsed_summary TEXT, 
 	confidence FLOAT NOT NULL, 
+	timeline VARCHAR(200), 
 	detected_date DATE NOT NULL, 
 	expiry_date DATE, 
 	status VARCHAR(20) NOT NULL, 

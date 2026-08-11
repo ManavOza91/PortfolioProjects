@@ -49,7 +49,13 @@ outcome-weighting loop does not), phase 9 coach (prioritise/draft/critique/notic
 only `llm.coach_model` config exists), phase 10 automated detection (openFDA, grants,
 news, jobs).
 
-**Never verified:** a live parser call. No API key has been available in any session.
+**No API key required.** Signals are entered on a form (`/add/signal` → `create_signal`);
+the taxonomy supplies the weight. `anthropic` is an optional extra (`.[llm]`) and is NOT
+installed by default — keep every import of it lazy or inside `llm/client.get_client()`.
+When a key IS present, `llm_ready` turns on and the free-text note box reappears by
+itself in `add.html` and `company.html`. Don't reintroduce a "no API key" warning.
+
+**Never verified:** a live parser call. No key has been available in any session.
 Request shape is covered by stubbed tests only.
 
 ## Load-bearing decisions — do not "tidy" these

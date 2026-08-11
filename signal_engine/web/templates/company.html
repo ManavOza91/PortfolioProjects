@@ -43,6 +43,7 @@
                 {% if not c.decays %}<span class="pill">structural, never decays</span>{% endif %}
                 {% if c.expired %}<span class="pill warn">past expiry, held at floor</span>{% endif %}
                 {% if c.summary %}<div class="small muted">{{ c.summary }}</div>{% endif %}
+                {% if c.timeline %}<div class="small"><span class="pill">timeline: {{ c.timeline }}</span></div>{% endif %}
                 <div class="small muted">
                   {{ c.detected_date.strftime('%d %b %Y') }} &middot; {{ c.age_days }} days old &middot; via {{ c.source }}
                 </div>
@@ -187,7 +188,41 @@
     </details>
 
     <details class="card" {{ 'open' if not breakdown.contributions }}>
-      <summary>Add a note about this company</summary>
+      <summary>Add a signal</summary>
+      <div class="inner">
+        <form method="post" action="/add/signal">
+          <input type="hidden" name="company_name" value="{{ company.name }}">
+          <div class="field">
+            <label>Signal</label>
+            <select name="type_key" required>
+              <option value="">— pick one —</option>
+              {% for t in taxonomy.types %}
+                <option value="{{ t.key }}">{{ t.label }} ({{ '%g'|format(t.base_weight) }} pts)</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Date observed</label>
+              <input type="date" name="detected_date" value="{{ today.isoformat() }}">
+            </div>
+            <div class="field">
+              <label>Timeline</label>
+              <input type="text" name="timeline" placeholder="evaluating next year">
+            </div>
+          </div>
+          <div class="field">
+            <label>Detail <span class="muted">(optional)</span></label>
+            <textarea name="notes" rows="2" style="min-height:52px"></textarea>
+          </div>
+          <button type="submit">Save and score</button>
+        </form>
+      </div>
+    </details>
+
+    {% if llm_ready %}
+    <details class="card">
+      <summary>Paste a note instead</summary>
       <div class="inner">
         <form method="post" action="/add/note">
           <input type="hidden" name="company_name" value="{{ company.name }}">
@@ -202,6 +237,7 @@
         </form>
       </div>
     </details>
+    {% endif %}
 
     <details class="card">
       <summary>Contacts ({{ contacts|length }})</summary>

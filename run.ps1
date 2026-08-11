@@ -53,13 +53,6 @@ elseif ($extras -ne "." -and -not (Test-Path ".venv\Scripts\pytest.exe")) {
     uv pip install -e $extras --quiet
 }
 
-if (-not (Test-Path ".env") -and -not $env:ANTHROPIC_API_KEY) {
-    Write-Host ""
-    Write-Host "Note: no ANTHROPIC_API_KEY found. The app runs, but note parsing is off." -ForegroundColor Yellow
-    Write-Host "      Put ANTHROPIC_API_KEY=sk-ant-... in a file called .env here to switch it on."
-    Write-Host ""
-}
-
 # Scripts that live outside the app package.
 if ($args.Count -gt 0 -and $args[0] -eq "parser-check") {
     & $venvPython "scripts\parser_check.py" @($args | Select-Object -Skip 1)

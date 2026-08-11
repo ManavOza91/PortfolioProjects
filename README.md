@@ -33,15 +33,20 @@ on Windows), creates the database, seeds the signal taxonomy, and opens
 The two runners are equivalent — every command below works with either. Substitute
 `.\run.ps1` for `./run.sh` on Windows.
 
-To use the AI features (note parsing, and the coach when it lands), put your
-Anthropic API key in a file called `.env` next to this README:
+**No API key needed, and no ongoing cost.** You record signals on a form: pick the
+company, pick the signal from the taxonomy, set the date and timeline. The weight comes
+from the taxonomy, so you never have to decide what a signal is worth. Scoring, decay,
+compounding, tiers, the queue and the Buddy Score all work exactly the same.
 
-```
-ANTHROPIC_API_KEY=sk-ant-...
+*Optional:* if you later want free-text notes parsed into signals automatically, install
+the extra and add a key —
+
+```bash
+uv pip install -e ".[llm]"
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 ```
 
-Without a key the system still runs — notes are stored raw and flagged as unparsed,
-so nothing you type is ever lost. You can parse them later.
+— and a "paste a note instead" box appears alongside the form. Nothing else changes.
 
 ### Other commands
 

@@ -54,6 +54,7 @@ class Contribution:
     source: str
     product_fit: str | None
     summary: str | None
+    timeline: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -329,6 +330,7 @@ def build_contributions(
                 source=s.source,
                 product_fit=s.product_fit or (spec.product_fit if spec else None),
                 summary=s.parsed_summary,
+                timeline=s.timeline,
             )
         )
     return out

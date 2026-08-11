@@ -47,12 +47,6 @@ elif [ "$EXTRAS" != "." ] && [ ! -x .venv/bin/pytest ]; then
   uv pip install -e "$EXTRAS" --quiet
 fi
 
-if [ ! -f .env ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-  echo "Note: no ANTHROPIC_API_KEY found. The app runs, but note parsing is off."
-  echo "      Put ANTHROPIC_API_KEY=sk-ant-... in a .env file here to switch it on."
-  echo
-fi
-
 # Scripts that live outside the app package.
 if [ "${1:-}" = "parser-check" ]; then
   shift

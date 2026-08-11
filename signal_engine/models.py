@@ -175,6 +175,10 @@ class Signal(Base):
     parsed_summary: Mapped[Optional[str]] = mapped_column(Text)
     confidence: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
 
+    # Buying timeline in the seller's own words: "evaluating next year", "budget Q3".
+    # Free text on purpose — it is a quote, not a category.
+    timeline: Mapped[Optional[str]] = mapped_column(String(200))
+
     detected_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
     expiry_date: Mapped[Optional[dt.date]] = mapped_column(Date)
 

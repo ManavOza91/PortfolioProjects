@@ -8,17 +8,99 @@
   <div>
     <h1>Add</h1>
     <div class="sub">
-      One mechanism, three entry points. Write it the way you'd say it — the parser
-      extracts the signal, and the raw text is kept either way.
+      A company enters the pipeline when a signal fires against it — never for being
+      on a list.
     </div>
   </div>
 </div>
 
 <div class="grid side">
   <div>
-    <!-- ============ 1. Company / signal note ============ -->
+    <!-- ============ 1. Known signal — the primary entry path ============ -->
     <div class="panel">
-      <h2>Company note <span class="sub">the highest-converting signals only ever arrive this way</span></h2>
+      <h2>Add a signal <span class="sub">the highest-converting signals only ever arrive this way</span></h2>
+      <div class="panel-body">
+        <form method="post" action="/add/signal">
+          <div class="row">
+            <div class="field">
+              <label>Company</label>
+              <input type="text" name="company_name" list="known-companies" required
+                     value="{{ prefill_company }}" placeholder="e.g. Northwind Diagnostics" autocomplete="off">
+              <datalist id="known-companies">
+                {% for c in companies %}<option value="{{ c.name }}">{% endfor %}
+              </datalist>
+              <div class="hint">Existing companies autocomplete. A new name is created as you type it.</div>
+            </div>
+            <div class="field">
+              <label>Website <span class="muted">(optional)</span></label>
+              <input type="text" name="company_domain" placeholder="northwinddx.com">
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Signal</label>
+            <select name="type_key" required>
+              <option value="">— pick the signal that fired —</option>
+              {% for t in taxonomy.types %}
+                <option value="{{ t.key }}">
+                  {{ t.label }} — {{ '%g'|format(t.base_weight) }} pts, product {{ t.product_fit }}{{ ', structural' if not t.decays }}
+                </option>
+              {% endfor %}
+            </select>
+            <div class="hint">
+              Weight comes from the taxonomy, so you never have to decide how much a
+              signal is worth. Edit <code>data/taxonomy.yaml</code> to change the list.
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>Product</label>
+              <select name="product_fit">
+                <option value="">use the signal's default</option>
+                <option value="A">Product A — {{ cfg.products.A.name }}</option>
+                <option value="B">Product B — {{ cfg.products.B.name }}</option>
+                <option value="both">Both</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Date observed</label>
+              <input type="date" name="detected_date" value="{{ today.isoformat() }}">
+              <div class="hint">Backdate it if you learned this a while ago — decay is slow.</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>Timeline <span class="muted">(optional)</span></label>
+              <input type="text" name="timeline" placeholder="evaluating next year">
+            </div>
+            <div class="field">
+              <label>How you learned it</label>
+              <select name="source">
+                <option value="manual">conversation / observation</option>
+                <option value="event">trade show or conference</option>
+                <option value="inbound">inbound enquiry</option>
+                <option value="auto">public source</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Detail <span class="muted">(optional, shown on the queue as the reason)</span></label>
+            <textarea name="notes" rows="2" style="min-height:56px"
+              placeholder="Building beads on a rig they made themselves and can't keep up."></textarea>
+          </div>
+
+          <button type="submit">Save signal and score it</button>
+        </form>
+      </div>
+    </div>
+
+    {% if llm_ready %}
+    <!-- ============ Free-text note (only when an API key is present) ============ -->
+    <div class="panel">
+      <h2>Paste a note instead <span class="sub">parsed into signals for you</span></h2>
       <div class="panel-body">
         <form method="post" action="/add/note">
           <div class="row">
@@ -129,6 +211,7 @@
         {% endif %}
       </div>
     </div>
+    {% endif %}{# llm_ready #}
   </div>
 
   <!-- ============ 2. Bare company ============ -->
@@ -153,15 +236,18 @@
     </div>
 
     <div class="panel">
-      <h2>What the parser looks for</h2>
+      <h2>The signal list</h2>
       <div class="panel-body">
         <p class="small muted" style="margin-top:0">
-          The taxonomy is data, not code. See or edit the full list on the
-          <a href="/taxonomy">Taxonomy page</a> or in <code>data/taxonomy.yaml</code>.
+          The taxonomy is data, not code — {{ taxonomy.types|length }} signal types,
+          each with its own weight and product fit. See the full list with weights on
+          the <a href="/taxonomy">Taxonomy page</a>, or edit
+          <code>data/taxonomy.yaml</code> and run <code>seed</code>.
         </p>
         <p class="small muted">
-          If a note contains nothing scoreable it is saved with no score rather than
-          given a made-up one. That is deliberate — an empty result is a correct answer.
+          If nothing in the list fits what you saw, that is information: the company
+          does not enter the pipeline. Add the type to the taxonomy if it is a pattern
+          you expect to see again.
         </p>
       </div>
     </div>

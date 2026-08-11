@@ -22,6 +22,7 @@ from ..buddy import compute_buddy_score, compute_trend, rollups
 from ..config import get_config, get_taxonomy
 from ..db import get_db
 from ..ingest import (
+    create_signal,
     find_or_create_company,
     ingest_manager_insight,
     ingest_note,
@@ -29,7 +30,6 @@ from ..ingest import (
     upsert_contact,
 )
 from ..llm.client import api_key_present
-from ..llm.parser import parse_entry
 from ..models import Activity, Company, Contact, ManagerInsight, Signal, SignalType
 from ..reporting import (
     activity_summary,
@@ -202,7 +202,13 @@ def add_form(request: Request, db: DbSession, company: str | None = None):
     return templates.TemplateResponse(
         request,
         "add.html",
-        _ctx(request, companies=recent, prefill_company=company or "", insights=insights),
+        _ctx(
+            request,
+            companies=recent,
+            prefill_company=company or "",
+            insights=insights,
+            taxonomy=get_taxonomy(),
+        ),
     )
 
 
@@ -239,6 +245,74 @@ def add_note(
 
     kind = "warn" if (result.unscored or not result.parse_ok) else "ok"
     return _redirect(f"/company/{result.company.id}", result.message(), kind)
+
+
+@app.post("/add/signal")
+def add_signal(
+    db: DbSession,
+    type_key: Annotated[str, Form()],
+    company_name: Annotated[str, Form()],
+    company_domain: Annotated[str, Form()] = "",
+    country: Annotated[str, Form()] = "",
+    segment: Annotated[str, Form()] = "",
+    product_fit: Annotated[str, Form()] = "",
+    detected_date: Annotated[str, Form()] = "",
+    timeline: Annotated[str, Form()] = "",
+    source: Annotated[str, Form()] = "manual",
+    notes: Annotated[str, Form()] = "",
+):
+    """Record a signal you have already worked out yourself. No parsing, no API call.
+
+    This is the primary entry path. The taxonomy supplies the weight and the default
+    product fit; everything the scoring engine does downstream is identical to a
+    parsed signal.
+    """
+    company_name = company_name.strip()
+    if not company_name:
+        return _redirect("/add", "A signal needs a company.", "warn")
+
+    spec = db.scalar(
+        select(SignalType).where(
+            SignalType.tenant_id == get_config().tenant_id,
+            SignalType.key == type_key.strip(),
+            SignalType.active.is_(True),
+        )
+    )
+    if spec is None:
+        return _redirect("/add", "Pick a signal type from the list.", "warn")
+
+    company, created = find_or_create_company(
+        db,
+        name=company_name,
+        domain=company_domain.strip() or None,
+        country=country.strip() or None,
+        segment=segment.strip() or None,
+    )
+
+    signal = create_signal(
+        db,
+        company,
+        type_key=spec.key,
+        source=source or "manual",
+        raw_text=notes.strip() or None,
+        parsed_summary=notes.strip() or spec.label,
+        confidence=get_config().manual_default_confidence,
+        detected_date=_parse_date(detected_date) or _today(),
+        product_fit=product_fit.strip() or spec.product_fit,
+        timeline=timeline.strip() or None,
+    )
+    breakdown = rescore_company(db, company)
+
+    bits = [f"{spec.label} recorded ({signal.weight:g} pts)"]
+    if created:
+        bits.append("new company")
+    bits.append(f"score now {breakdown.score:.0f}")
+    if breakdown.tier:
+        bits.append(f"Tier {breakdown.tier}")
+    if breakdown.compounding_applied:
+        bits.append(f"compounding ×{breakdown.multiplier:.2f}")
+
+    return _redirect(f"/company/{company.id}", ", ".join(bits) + ".")
 
 
 @app.post("/add/company")
@@ -426,6 +500,10 @@ def reparse(db: DbSession, company_id: int, signal_id: int):
         raise HTTPException(404, "Not found")
     if not signal.raw_text:
         return _redirect(f"/company/{company_id}", "That record has no raw text.", "warn")
+
+    # Imported lazily: the `anthropic` package is an optional install, so the app
+    # must be importable and fully usable without it.
+    from ..llm.parser import parse_entry
 
     outcome = parse_entry(signal.raw_text, company_hint=company.name)
     if not outcome.ok:
