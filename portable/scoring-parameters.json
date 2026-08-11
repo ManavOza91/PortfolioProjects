@@ -1,0 +1,70 @@
+{
+  "_generated": "GENERATED FILE — do not edit by hand.\nRegenerate with: ./run.sh export-portable\nSource of truth: data/taxonomy.yaml, config.yaml, signal_engine/",
+  "_note": "Every number the scoring engine and Buddy Score depend on. Pair with SCORING.md and BUDDY-SCORE.md, which give the formulas these plug into.",
+  "scoring": {
+    "decay": {
+      "rate_per_quarter": 0.9,
+      "floor": 0.4,
+      "days_per_quarter": 91.31,
+      "expiry_drops_to_floor": true
+    },
+    "compounding": {
+      "window_days": 90,
+      "multiplier": 1.3,
+      "require_distinct_types": true,
+      "stack": false
+    },
+    "tiers": [
+      {
+        "name": "A",
+        "min_score": 55.0
+      },
+      {
+        "name": "B",
+        "min_score": 25.0
+      },
+      {
+        "name": "C",
+        "min_score": 12.0
+      },
+      {
+        "name": "D",
+        "min_score": 0.0
+      }
+    ],
+    "auto_review_threshold": 0.7,
+    "manual_review_threshold": 0.45,
+    "manual_default_confidence": 0.9,
+    "confidence_scales_weight": false
+  },
+  "buddy_score": {
+    "components": {
+      "progression": 30,
+      "signal_quality": 25,
+      "volume": 25,
+      "consistency": 20
+    },
+    "weekly_touch_target": 15,
+    "weekly_active_day_target": 4,
+    "target_reply_rate": 0.15,
+    "target_conversation_rate": 0.08,
+    "target_meeting_rate": 0.05,
+    "quality_tiers": [
+      "A",
+      "B"
+    ],
+    "trend_lookback_periods": 4
+  },
+  "products": {
+    "A": {
+      "code": "FDM",
+      "name": "Freeze-drying microscope",
+      "buyers": "Formulation scientists, drug product scientists, lyophilisation specialists and MSAT teams at pharma companies and CDMOs.\n"
+    },
+    "B": {
+      "code": "LBP",
+      "name": "Lyobead generator",
+      "buyers": "Assay development and reagent scientists at diagnostics companies, from startups to large IVD manufacturers.\n"
+    }
+  }
+}

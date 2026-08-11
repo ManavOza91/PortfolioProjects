@@ -1,0 +1,87 @@
+{
+  "_generated": "GENERATED FILE — do not edit by hand.\nRegenerate with: ./run.sh export-portable\nSource of truth: data/taxonomy.yaml, config.yaml, signal_engine/",
+  "_note": "JSON Schema for the manager-insight parser's structured output.",
+  "properties": {
+    "segment": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Segment"
+    },
+    "geography": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Geography"
+    },
+    "signal_type": {
+      "anyOf": [
+        {
+          "enum": [
+            "manual_diy_production_at_capacity",
+            "job_posting_relevant_science",
+            "new_lyo_capacity",
+            "competitor_dissatisfaction",
+            "format_shift_to_bead",
+            "regulatory_submission",
+            "assay_kit_panel_launch",
+            "phase_1_parenteral",
+            "multi_product_pipeline",
+            "iso13485_facility_expansion",
+            "funding_scale_up",
+            "grant_award",
+            "publication_stability_lyo",
+            "conference_presentation"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Signal Type"
+    },
+    "weight_adjustment": {
+      "title": "Weight Adjustment",
+      "type": "number"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "expiry_days": {
+      "title": "Expiry Days",
+      "type": "integer"
+    },
+    "confidence": {
+      "title": "Confidence",
+      "type": "number"
+    },
+    "nothing_scoreable": {
+      "title": "Nothing Scoreable",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "segment",
+    "geography",
+    "signal_type",
+    "weight_adjustment",
+    "summary",
+    "expiry_days",
+    "confidence",
+    "nothing_scoreable"
+  ],
+  "title": "ParsedInsight",
+  "type": "object"
+}

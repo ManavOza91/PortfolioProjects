@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass
 
@@ -26,12 +27,23 @@ from signal_engine.config import get_config, get_taxonomy
 from signal_engine.llm.client import api_key_present
 from signal_engine.llm.parser import parse_entry
 
-BOLD = "\033[1m"
-DIM = "\033[2m"
-GREEN = "\033[32m"
-RED = "\033[31m"
-YELLOW = "\033[33m"
-OFF = "\033[0m"
+def _colour_supported() -> bool:
+    """Old Windows consoles render ANSI codes as literal garbage."""
+    if os.environ.get("NO_COLOR"):
+        return False
+    if not sys.stdout.isatty():
+        return False
+    if sys.platform == "win32":
+        # Windows Terminal and PowerShell 7 set this; legacy conhost does not.
+        return bool(os.environ.get("WT_SESSION") or os.environ.get("TERM"))
+    return True
+
+
+if _colour_supported():
+    BOLD, DIM = "\033[1m", "\033[2m"
+    GREEN, RED, YELLOW, OFF = "\033[32m", "\033[31m", "\033[33m", "\033[0m"
+else:
+    BOLD = DIM = GREEN = RED = YELLOW = OFF = ""
 
 
 @dataclass

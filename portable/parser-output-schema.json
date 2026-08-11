@@ -1,0 +1,217 @@
+{
+  "_generated": "GENERATED FILE — do not edit by hand.\nRegenerate with: ./run.sh export-portable\nSource of truth: data/taxonomy.yaml, config.yaml, signal_engine/",
+  "_note": "JSON Schema for the note parser's structured output. Enforce this with your provider's structured-output feature. type_key is a closed enum built from the taxonomy, which is what stops the model inventing a signal type to fill the schema.",
+  "$defs": {
+    "ParsedSignal": {
+      "description": "One buying signal found in the text. `evidence` must quote or closely paraphrase the words in the note that justify it.",
+      "properties": {
+        "type_key": {
+          "enum": [
+            "manual_diy_production_at_capacity",
+            "job_posting_relevant_science",
+            "new_lyo_capacity",
+            "competitor_dissatisfaction",
+            "format_shift_to_bead",
+            "regulatory_submission",
+            "assay_kit_panel_launch",
+            "phase_1_parenteral",
+            "multi_product_pipeline",
+            "iso13485_facility_expansion",
+            "funding_scale_up",
+            "grant_award",
+            "publication_stability_lyo",
+            "conference_presentation"
+          ],
+          "title": "Type Key",
+          "type": "string"
+        },
+        "product_fit": {
+          "enum": [
+            "A",
+            "B",
+            "both"
+          ],
+          "title": "Product Fit",
+          "type": "string"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "detected_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Detected Date"
+        },
+        "timeline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Timeline"
+        }
+      },
+      "required": [
+        "type_key",
+        "product_fit",
+        "confidence",
+        "evidence",
+        "summary",
+        "detected_date",
+        "timeline"
+      ],
+      "title": "ParsedSignal",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "company_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Company Name"
+    },
+    "company_domain": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Company Domain"
+    },
+    "company_country": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Company Country"
+    },
+    "company_segment": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Company Segment"
+    },
+    "contact_full_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Contact Full Name"
+    },
+    "contact_job_title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Contact Job Title"
+    },
+    "contact_email": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Contact Email"
+    },
+    "contact_linkedin_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Contact Linkedin Url"
+    },
+    "contact_persona": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Contact Persona"
+    },
+    "signals": {
+      "items": {
+        "$ref": "#/$defs/ParsedSignal"
+      },
+      "title": "Signals",
+      "type": "array"
+    },
+    "nothing_scoreable": {
+      "title": "Nothing Scoreable",
+      "type": "boolean"
+    },
+    "reasoning": {
+      "title": "Reasoning",
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_name",
+    "company_domain",
+    "company_country",
+    "company_segment",
+    "contact_full_name",
+    "contact_job_title",
+    "contact_email",
+    "contact_linkedin_url",
+    "contact_persona",
+    "signals",
+    "nothing_scoreable",
+    "reasoning"
+  ],
+  "title": "ParsedEntry",
+  "type": "object"
+}

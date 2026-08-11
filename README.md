@@ -14,20 +14,24 @@ you perform yourself, and it is the step that produces your best outreach.
 
 ## Running it
 
-You need [uv](https://docs.astral.sh/uv/) installed. On macOS or Linux:
+**Windows** — open PowerShell in this folder and run:
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+```powershell
+.\run.ps1
 ```
 
-Then, from this folder:
+**macOS or Linux** — open Terminal in this folder and run:
 
 ```bash
 ./run.sh
 ```
 
-That is the whole thing. It installs dependencies, creates the database, seeds the
-signal taxonomy, and opens <http://127.0.0.1:8420> in your browser.
+That is the whole thing. It installs everything it needs (including `uv` and Python
+on Windows), creates the database, seeds the signal taxonomy, and opens
+<http://127.0.0.1:8420> in your browser.
+
+The two runners are equivalent — every command below works with either. Substitute
+`.\run.ps1` for `./run.sh` on Windows.
 
 To use the AI features (note parsing, and the coach when it lands), put your
 Anthropic API key in a file called `.env` next to this README:
@@ -51,6 +55,8 @@ so nothing you type is ever lost. You can parse them later.
 | `./run.sh import` | Run the CSV import |
 | `./run.sh demo` | Load a small worked example so you can see the shape of it |
 | `./run.sh purge-contacts` | Delete **all** personal data, keeping scoring intact |
+| `./run.sh parser-check` | Run the parser against known notes and grade the output |
+| `./run.sh export-portable` | Regenerate `portable/` (see below) |
 | `./run.sh test` | Run the test suite |
 
 ---
@@ -67,6 +73,29 @@ so nothing you type is ever lost. You can parse them later.
 
 There is deliberately no JavaScript framework. A tool that has to start with one
 command on a non-developer's laptop cannot depend on a working `npm install`.
+
+---
+
+## Rebuilding this in another stack — `portable/`
+
+If this becomes a SaaS product on a different stack, `portable/` is what ports.
+It holds the domain logic as data, config, prose specs, plain SQL and golden test
+vectors — enough to reimplement the system **without reading any Python**.
+
+| File | What it is |
+|---|---|
+| `portable/SCORING.md` | Decay, compounding, tiers, what scores and what doesn't — the formulas in prose |
+| `portable/BUDDY-SCORE.md` | The four components and the invariant that must not break |
+| `portable/taxonomy.json` | The signal types, weights, product fits, decay behaviour |
+| `portable/scoring-parameters.json` | Every threshold and constant |
+| `portable/parser-system-prompt.txt` | The complete parser prompt, taxonomy rendered in |
+| `portable/parser-output-schema.json` | JSON Schema for the structured output |
+| `portable/schema.postgres.sql` | Plain PostgreSQL DDL — the dialect Supabase uses |
+| `portable/test-vectors.json` | Golden inputs and expected outputs, to verify a reimplementation |
+
+Start at `portable/README.md`. Everything except the three `.md` files is generated
+by `./run.sh export-portable`, and `tests/test_portable.py` fails if it goes stale —
+so the spec cannot silently drift away from the code that actually runs.
 
 ---
 

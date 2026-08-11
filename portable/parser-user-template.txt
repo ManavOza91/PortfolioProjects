@@ -1,0 +1,13 @@
+# GENERATED FILE — do not edit by hand.
+Regenerate with: ./run.sh export-portable
+Source of truth: data/taxonomy.yaml, config.yaml, signal_engine/
+# Shape of the user turn. Everything volatile lives here, never in the
+# system block. Lines in {braces} are substituted; omit optional ones.
+------------------------------------------------------------------------------
+Today's date is {today_iso} ({today_human}).
+
+The user has already named the company: {company_hint}      # optional
+The user has already given this contact detail: {contact_hint}  # optional
+
+NOTE:
+{the note text}

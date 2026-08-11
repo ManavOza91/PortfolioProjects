@@ -1,0 +1,230 @@
+{
+  "_generated": "GENERATED FILE — do not edit by hand.\nRegenerate with: ./run.sh export-portable\nSource of truth: data/taxonomy.yaml, config.yaml, signal_engine/",
+  "_note": "Golden vectors for verifying a reimplementation.",
+  "as_of": "2026-01-01",
+  "how_to_use": "Reimplement the scoring rules in your stack, then run these vectors through them. If every expected value matches, your implementation agrees with the reference one. These were computed BY the reference implementation, so they are authoritative rather than aspirational.",
+  "decay": [
+    {
+      "age_days": 0,
+      "decays": true,
+      "expected_factor": 1.0,
+      "expired": false,
+      "note": "same day — full weight"
+    },
+    {
+      "age_days": 91,
+      "decays": true,
+      "expected_factor": 0.900322,
+      "expired": false,
+      "note": "one quarter — about 10% lost"
+    },
+    {
+      "age_days": 182,
+      "decays": true,
+      "expected_factor": 0.81058,
+      "expired": false,
+      "note": "six months — still worth most of its weight, NOT dead"
+    },
+    {
+      "age_days": 365,
+      "decays": true,
+      "expected_factor": 0.656282,
+      "expired": false,
+      "note": "one year"
+    },
+    {
+      "age_days": 730,
+      "decays": true,
+      "expected_factor": 0.430706,
+      "expired": false,
+      "note": "two years — a real deal re-engaged at this age"
+    },
+    {
+      "age_days": 1825,
+      "decays": true,
+      "expected_factor": 0.4,
+      "expired": false,
+      "note": "five years — floored, never zero"
+    },
+    {
+      "age_days": 1825,
+      "decays": false,
+      "expected_factor": 1.0,
+      "expired": false,
+      "note": "five years, structural — no decay at all"
+    },
+    {
+      "age_days": 10,
+      "decays": true,
+      "expiry_date_days_ago": 1,
+      "expected_factor": 0.4,
+      "expired": true,
+      "note": "past its expiry — drops straight to the floor, still not zero"
+    }
+  ],
+  "scoring": [
+    {
+      "name": "single heaviest signal, fresh",
+      "note": "The highest-converting signal in the taxonomy must on its own reach a tier that counts as quality outreach.",
+      "signals": [
+        {
+          "type_key": "manual_diy_production_at_capacity",
+          "detected_days_before_as_of": 0,
+          "base_weight": 30.0
+        }
+      ],
+      "expected": {
+        "raw_sum": 30.0,
+        "compounding_multiplier": 1.0,
+        "score": 30.0,
+        "tier": "B"
+      }
+    },
+    {
+      "name": "two independent signals 30 days apart",
+      "note": "Compounding fires: distinct types inside the 90-day window.",
+      "signals": [
+        {
+          "type_key": "regulatory_submission",
+          "detected_days_before_as_of": 50,
+          "base_weight": 25.0
+        },
+        {
+          "type_key": "funding_scale_up",
+          "detected_days_before_as_of": 20,
+          "base_weight": 15.0
+        }
+      ],
+      "expected": {
+        "raw_sum": 38.256273,
+        "compounding_multiplier": 1.3,
+        "score": 49.733155,
+        "tier": "B"
+      }
+    },
+    {
+      "name": "two signals of the SAME type",
+      "note": "No compounding — two job postings are one story, not two signals.",
+      "signals": [
+        {
+          "type_key": "job_posting_relevant_science",
+          "detected_days_before_as_of": 10,
+          "base_weight": 30.0
+        },
+        {
+          "type_key": "job_posting_relevant_science",
+          "detected_days_before_as_of": 30,
+          "base_weight": 30.0
+        }
+      ],
+      "expected": {
+        "raw_sum": 58.635106,
+        "compounding_multiplier": 1.0,
+        "score": 58.635106,
+        "tier": "A"
+      }
+    },
+    {
+      "name": "two independent signals 400 days apart",
+      "note": "No compounding — outside the window.",
+      "signals": [
+        {
+          "type_key": "regulatory_submission",
+          "detected_days_before_as_of": 400,
+          "base_weight": 25.0
+        },
+        {
+          "type_key": "funding_scale_up",
+          "detected_days_before_as_of": 5,
+          "base_weight": 15.0
+        }
+      ],
+      "expected": {
+        "raw_sum": 30.671343,
+        "compounding_multiplier": 1.0,
+        "score": 30.671343,
+        "tier": "B"
+      }
+    },
+    {
+      "name": "funding alone",
+      "note": "Funding is a qualifier, not a trigger. Must not reach the top tier.",
+      "signals": [
+        {
+          "type_key": "funding_scale_up",
+          "detected_days_before_as_of": 0,
+          "base_weight": 15.0
+        }
+      ],
+      "expected": {
+        "raw_sum": 15.0,
+        "compounding_multiplier": 1.0,
+        "score": 15.0,
+        "tier": "C"
+      }
+    },
+    {
+      "name": "structural signal only, very old",
+      "note": "Structural signals never decay.",
+      "signals": [
+        {
+          "type_key": "multi_product_pipeline",
+          "detected_days_before_as_of": 1500,
+          "base_weight": 18.0
+        }
+      ],
+      "expected": {
+        "raw_sum": 18.0,
+        "compounding_multiplier": 1.0,
+        "score": 18.0,
+        "tier": "C"
+      }
+    }
+  ],
+  "tiers": [
+    {
+      "score": 0,
+      "expected_tier": "D"
+    },
+    {
+      "score": 5,
+      "expected_tier": "D"
+    },
+    {
+      "score": 11.99,
+      "expected_tier": "D"
+    },
+    {
+      "score": 12,
+      "expected_tier": "C"
+    },
+    {
+      "score": 24.99,
+      "expected_tier": "C"
+    },
+    {
+      "score": 25,
+      "expected_tier": "B"
+    },
+    {
+      "score": 30,
+      "expected_tier": "B"
+    },
+    {
+      "score": 54.99,
+      "expected_tier": "B"
+    },
+    {
+      "score": 55,
+      "expected_tier": "A"
+    },
+    {
+      "score": 100,
+      "expected_tier": "A"
+    },
+    {
+      "score": 250,
+      "expected_tier": "A"
+    }
+  ]
+}

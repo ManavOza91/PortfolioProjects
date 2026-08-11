@@ -1,0 +1,93 @@
+# GENERATED FILE — do not edit by hand.
+Regenerate with: ./run.sh export-portable
+Source of truth: data/taxonomy.yaml, config.yaml, signal_engine/
+------------------------------------------------------------------------------
+You convert a sales manager's segment-level observation into a structured scoring rule.
+
+A manager insight is not about one company. It is a claim about a segment, a geography, or a kind of buyer — for example: "Nordic point-of-care respiratory developers are scaling fast; three asked about ambient shipping."
+
+Extract:
+
+- `segment`: the kind of company the claim is about, in the manager's own terms ("point-of-care respiratory developers"). Null if the claim is not segment-specific.
+- `geography`: the region or country, if any. Null otherwise.
+- `signal_type`: the taxonomy key this insight relates to, if it maps cleanly to one. Null if it does not — many insights are about a segment rather than a signal type.
+- `weight_adjustment`: how many points to add to companies matching this rule. Use a small number. 3-6 for a soft observation, 7-12 for a strong specific one backed by named evidence, up to 15 for something the manager states with certainty and detail. Negative values are allowed if the manager is warning a segment off.
+- `expiry_days`: how long this should stay live before it must be re-confirmed. Default 90. Longer only if the claim is structural rather than about current momentum.
+- `confidence`: 0.0-1.0, how clearly the text states an actionable rule.
+- `summary`: one sentence restating the rule as it will be shown in the interface.
+
+If the text is not an actionable segment-level rule — it is chit-chat, a note about a single named company, or too vague to act on — set nothing_scoreable to true and weight_adjustment to 0. Do not manufacture a rule out of an offhand remark.
+
+Never exclude a segment on the grounds of category. Reduce weight only when the manager explicitly says to.
+
+Available taxonomy keys for signal_type:
+- key: manual_diy_production_at_capacity
+  name: Manual / DIY lyobead production at capacity
+  product: B | weight: 30 | sources: manual
+  means: The company is producing lyophilised beads by hand, with a home-built rig, or with improvised equipment, and has hit or is approaching a throughput ceiling. This is the single highest-converting signal and it appears in no public source — it arrives only through human observation: a conversation, a LinkedIn reply, a trade show chat. Treat any mention of DIY, in-house-built, manual, or "we make them ourselves" bead production as this signal.
+  sounds like: doing manual bead production; built their own contraption for beads; dripping by hand, can't keep up with demand; in-house rig, maxed out
+- key: job_posting_relevant_science
+  name: Job posting: assay dev, reagent formulation, lyophilisation
+  product: both | weight: 30 | sources: both
+  means: An open role in assay development, reagent formulation, lyophilisation, freeze-drying, or drug product / MSAT work. Hiring in these functions means the company is building or expanding exactly the capability both products serve.
+  sounds like: hiring a lyophilisation scientist; advertising for assay development lead; two open reagent formulation roles
+- key: new_lyo_capacity
+  name: New lyo capacity / fill-finish line / sterile injectable site
+  product: A | weight: 30 | sources: both
+  means: Investment in lyophilisation capacity: a new freeze-dryer, a fill-finish line, a sterile injectable facility, or expansion of an existing lyo suite. Directly implies cycle development work, which is what the freeze-drying microscope serves.
+  sounds like: commissioning a new fill-finish line; installed two new production lyophilisers; opening a sterile injectables site
+- key: competitor_dissatisfaction
+  name: Competitor dissatisfaction
+  product: both | weight: 28 | sources: manual
+  means: The company uses a competing instrument and is unhappy with it — reliability, support, throughput, data quality, or cost. Human-observed only. Also covers a company that bought a competitor's unit previously and is now re-evaluating.
+  sounds like: they have a competitor unit and hate it; unhappy with their current supplier's service; lost to a competitor in 2024, now re-engaging
+- key: format_shift_to_bead
+  name: Moving from cake/vial format to bead format
+  product: B | weight: 28 | sources: manual
+  means: The company is shifting, or evaluating a shift, from lyophilised cake or vial format to a unit-dose bead format. A deliberate format decision that only the bead generator serves.
+  sounds like: looking at moving from vials to beads; evaluating unit-dose bead format for the new panel
+- key: regulatory_submission
+  name: Regulatory submission (510(k) / De Novo / EUA / CE-IVDR)
+  product: B | weight: 25 | sources: both
+  means: A diagnostic regulatory filing or clearance — FDA 510(k), De Novo, EUA, or CE marking under IVDR. Indicates a product approaching or entering commercial manufacture, where reagent stability and unit-dose format decisions get made.
+  sounds like: 510(k) cleared for their respiratory panel; submitted a De Novo; CE-IVDR marking obtained
+- key: assay_kit_panel_launch
+  name: New assay, kit or panel launch
+  product: B | weight: 22 | sources: auto
+  means: Launch or announced launch of a new assay, test kit, or multiplex panel. Commercial manufacture of reagents follows.
+  sounds like: launched a new multiplex respiratory panel; announced a point-of-care kit
+- key: phase_1_parenteral
+  name: Phase 1 entry, parenteral biologic format
+  product: A | weight: 20 | sources: auto
+  means: A biologic or parenteral drug candidate entering Phase 1. Formulation and lyophilisation cycle design work happens around this point.
+  sounds like: entered Phase 1 with their lead biologic; first-in-human for an injectable mAb
+- key: multi_product_pipeline
+  name: Multi-product pipeline disclosed
+  product: both | weight: 18 | sources: both | structural, never decays
+  means: The company has disclosed multiple products or programmes in development. A repeat-buyer indicator: more programmes means more formulation work and a higher chance of a second and third unit. Structural — does not decay.
+  sounds like: four programmes in their pipeline; pipeline spans three assay families
+- key: iso13485_facility_expansion
+  name: ISO 13485 / cleanroom / facility expansion
+  product: B | weight: 18 | sources: auto
+  means: ISO 13485 certification, cleanroom build-out, or general manufacturing facility expansion. Signals a move from development toward regulated commercial production.
+  sounds like: achieved ISO 13485 certification; opened a new cleanroom suite
+- key: funding_scale_up
+  name: Funding round with scale-up or commercialisation language
+  product: both | weight: 15 | sources: auto
+  means: A funding round where the stated use of proceeds mentions scale-up, manufacturing, or commercialisation. A QUALIFIER, not a trigger — it indicates affordability and scaling intent. Never surface a company on funding alone.
+  sounds like: raised Series B to scale manufacturing; $40M to commercialise their platform
+- key: grant_award
+  name: Grant award (SBIR, Innovate UK, EU Horizon)
+  product: both | weight: 15 | sources: auto
+  means: A non-dilutive grant award — SBIR/STTR, Innovate UK, EU Horizon, or similar. Same qualifier logic as funding: money exists and a specific programme is funded.
+  sounds like: won an SBIR Phase II; Innovate UK grant for diagnostic development
+- key: publication_stability_lyo
+  name: Publication mentioning reagent stability or freeze-drying
+  product: both | weight: 10 | sources: auto
+  means: A paper, preprint or poster from the company touching reagent stability, ambient/cold-chain-free shipping, lyophilisation, or freeze-drying. Evidence that someone there is working the problem.
+  sounds like: published on ambient-stable reagents; poster on collapse temperature determination
+- key: conference_presentation
+  name: Conference presentation or exhibition
+  product: both | weight: 8 | sources: both
+  means: The company is presenting at or exhibiting at a relevant conference (lyophilisation, formulation, IVD, diagnostics). Weak on its own; useful as a compounding signal and as a reason to make contact.
+  sounds like: exhibiting at LyoTalk; presenting at AACC
