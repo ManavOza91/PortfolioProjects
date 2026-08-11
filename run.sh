@@ -53,4 +53,10 @@ if [ ! -f .env ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
   echo
 fi
 
+# Parser acceptance check lives outside the app package.
+if [ "${1:-}" = "parser-check" ]; then
+  shift
+  exec .venv/bin/python scripts/parser_check.py "$@"
+fi
+
 exec .venv/bin/python -m signal_engine "$@"
