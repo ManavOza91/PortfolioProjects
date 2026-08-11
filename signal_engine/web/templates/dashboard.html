@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% from "_macros.html" import queue_row, empty %}
+{% set nav = "dashboard" %}
+{% block title %}Dashboard — Signal Engine{% endblock %}
+
+{% block content %}
+
+<div class="stats">
+  <div class="stat">
+    <div class="k">In pipeline</div>
+    <div class="v">{{ totals.signalled_companies }}</div>
+    <div class="n">companies with a live signal</div>
+  </div>
+  <div class="stat">
+    <div class="k">Watchlist</div>
+    <div class="v">{{ totals.watchlist }}</div>
+    <div class="n">monitored, no signal yet</div>
+  </div>
+  <div class="stat">
+    <div class="k">Scored signals</div>
+    <div class="v">{{ totals.signals_scored }}</div>
+    <div class="n">{{ totals.signals_review }} awaiting review</div>
+  </div>
+  <div class="stat">
+    <div class="k">Touches</div>
+    <div class="v">{{ totals.activity_30d }}</div>
+    <div class="n">last 30 days</div>
+  </div>
+</div>
+
+<!-- ============ Buddy Score ============ -->
+<div class="panel">
+  <h2>
+    Buddy Score
+    <span class="sub">week of {{ week.period_start.strftime('%d %b') }} — leading indicator, not pipeline value</span>
+  </h2>
+  <div class="panel-body">
+    <div class="buddy">
+      <div class="buddy-meta">
+        <div class="buddy-number">{{ '%.0f'|format(week.score) }}</div>
+        <div class="trend {{ trend.direction }}">
+          {{ trend.arrow }}
+          {% if trend.direction == 'new' %}
+            first tracked period
+          {% else %}
+            {{ '%+.1f'|format(trend.delta) }} vs {{ '%.0f'|format(trend.baseline) }} average
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="components">
+        {% for name, got, max_pts, note in [
+          ('Progression', week.progression, cfg.buddy.components.progression,
+            '%d replies, %d conversations, %d meetings'|format(week.replies, week.conversations, week.meetings)),
+          ('Signal quality', week.signal_quality, cfg.buddy.components.signal_quality,
+            '%.0f%% of touches to Tier A/B'|format(week.signal_quality_pct)),
+          ('Volume', week.volume, cfg.buddy.components.volume,
+            '%d of %.0f target touches'|format(week.touches, week.touch_target)),
+          ('Consistency', week.consistency, cfg.buddy.components.consistency,
+            '%d of %.0f active days'|format(week.active_days, week.active_day_target)),
+        ] %}
+          <div class="component">
+            <span class="name">{{ name }}</span>
+            <span class="bar"><span style="width: {{ (got / max_pts * 100) if max_pts else 0 }}%"></span></span>
+            <span class="val">{{ '%.0f'|format(got) }}/{{ max_pts }}</span>
+          </div>
+          <div class="small muted" style="margin:-4px 0 2px 118px">{{ note }}</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="rollups">
+      {% for key, label in [('week','This week'), ('month','Month'), ('quarter','Quarter'), ('year','Year')] %}
+        <div class="rollup">
+          <div class="k">{{ label }}</div>
+          <div class="v">{{ '%.0f'|format(periods[key].score) }}</div>
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if week.notes %}
+      <div style="margin-top:14px">
+        {% for note in week.notes %}
+          <div class="flash warn" style="margin-bottom:8px">{{ note }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ============ Queue ============ -->
+<div class="panel">
+  <h2>
+    Who to contact
+    <span class="sub">ranked by live signal strength — a company appears only because a signal fired</span>
+    <span class="spacer" style="flex:1"></span>
+    <a href="/companies" class="small">see all &rarr;</a>
+  </h2>
+  <div class="panel-body tight">
+    {% if queue %}
+      <div class="queue">
+        {% for row in queue %}{{ queue_row(row) }}{% endfor %}
+      </div>
+    {% else %}
+      {{ empty('Nothing in the queue yet.',
+               'No company has a scoreable signal. Add one from the Add page — paste a note
+                from a call, a show, or a LinkedIn reply and it will be parsed into a signal.
+                Companies imported from a spreadsheet stay on the watchlist until then, which
+                is the point.') }}
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid side">
+  <!-- ============ Conversion by signal type ============ -->
+  <div class="panel">
+    <h2>Which signals produce meetings <span class="sub">by the signal governing at time of contact</span></h2>
+    <div class="panel-body tight overflow">
+      {% if conversion %}
+        <table>
+          <tr>
+            <th>Signal</th>
+            <th class="num">Cos</th>
+            <th class="num">Touches</th>
+            <th class="num">Replies</th>
+            <th class="num">Meetings</th>
+            <th class="num">Meeting rate</th>
+          </tr>
+          {% for r in conversion %}
+            <tr>
+              <td>{{ r.label }}</td>
+              <td class="num">{{ r.companies }}</td>
+              <td class="num">{{ r.touches }}</td>
+              <td class="num">{{ r.replies }}</td>
+              <td class="num">{{ r.meetings }}</td>
+              <td class="num">{{ '%.0f%%'|format(r.meeting_rate * 100) if r.touches else '—' }}</td>
+            </tr>
+          {% endfor %}
+        </table>
+      {% else %}
+        {{ empty('No outreach logged yet.',
+                 'Once you log activity against signalled companies, this table shows which
+                  signal types actually convert — and which ones you should stop chasing.') }}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ============ Activity ============ -->
+  <div class="panel">
+    <h2>Recent activity <span class="sub">{{ activity.total }} in 30 days</span></h2>
+    <div class="panel-body tight">
+      {% if activity.recent %}
+        <table>
+          {% for a, c in activity.recent %}
+            <tr>
+              <td class="small muted" style="white-space:nowrap">{{ a.date.strftime('%d %b') }}</td>
+              <td>
+                <a href="/company/{{ c.id }}">{{ c.name }}</a>
+                <div class="small muted">
+                  {{ a.type }}{% if a.outcome %} &middot; {{ a.outcome }}{% endif %}
+                  {% if a.company_tier_at_time_of_contact %}
+                    &middot; was Tier {{ a.company_tier_at_time_of_contact }}
+                  {% else %}
+                    &middot; <span style="color:var(--warn)">no tier at the time</span>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </table>
+      {% else %}
+        {{ empty('No activity logged.', 'Log touches from any company page. It is what makes the Buddy Score work.') }}
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if review_count %}
+  <div class="panel">
+    <h2>Review queue</h2>
+    <div class="panel-body">
+      <p style="margin:0">
+        {{ review_count }} record{{ '' if review_count == 1 else 's' }} held back — either
+        below the confidence bar or containing nothing scoreable.
+        <a href="/review">Review them &rarr;</a>
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+<form method="post" action="/rescore" style="margin-top:6px">
+  <button type="submit" class="ghost small">Recompute all scores against today</button>
+  <span class="hint" style="display:inline; margin-left:8px">
+    Signals decay slowly, so scores drift. This is also run automatically at startup.
+  </span>
+</form>
+
+{% endblock %}

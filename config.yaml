@@ -1,0 +1,158 @@
+# Signal Engine configuration.
+# Everything the system's behaviour depends on lives here or in data/taxonomy.yaml.
+# No company names, signal types or weights are hardcoded in the application.
+#
+# Edit this file and restart (Ctrl-C then ./run.sh) to apply.
+
+# ---------------------------------------------------------------------------
+# Identity — who is using this instance
+# ---------------------------------------------------------------------------
+user:
+  name: "Me"                  # shown on the dashboard, stored in created_by fields
+  tenant_id: 1                # multi-tenant hook; leave at 1 for single-user
+
+# ---------------------------------------------------------------------------
+# Products — referenced by product_fit throughout. Rename freely.
+# ---------------------------------------------------------------------------
+products:
+  A:
+    code: FDM
+    name: "Freeze-drying microscope"
+    buyers: >
+      Formulation scientists, drug product scientists, lyophilisation specialists
+      and MSAT teams at pharma companies and CDMOs.
+  B:
+    code: LBP
+    name: "Lyobead generator"
+    buyers: >
+      Assay development and reagent scientists at diagnostics companies,
+      from startups to large IVD manufacturers.
+
+# ---------------------------------------------------------------------------
+# Scoring
+# ---------------------------------------------------------------------------
+scoring:
+  # Slow decay. Capital equipment cycles run 6 months to 2 years; a six-month-old
+  # signal is NOT dead. A signal never falls to zero.
+  decay:
+    rate_per_quarter: 0.90    # retain 90% of weight each quarter
+    floor: 0.40               # never fall below 40% of base weight
+    days_per_quarter: 91.31
+
+    # A signal with an expiry_date set drops straight to the floor once passed,
+    # rather than gliding there. Signals with no expiry_date just decay normally.
+    # It never drops to zero — see finding 2 in the brief.
+    expiry_drops_to_floor: true
+
+  # Compounding. Two independent signals close together mean more than the sum:
+  # observed pattern is regulatory submission -> funding -> authorisation in 7 months.
+  compounding:
+    window_days: 90
+    multiplier: 1.30
+    require_distinct_types: true   # two signals of the same type do not compound
+    stack: false                   # true would apply the multiplier per extra cluster
+
+  # Tier thresholds, evaluated top-down on the final compounded score.
+  # Tier A/B companies are what "signal quality" in the Buddy Score rewards, so
+  # these thresholds decide what counts as legitimate outreach.
+  #
+  # CALIBRATION RULE: the B threshold must be at or below the heaviest weight in
+  # your taxonomy (currently 30). Otherwise no single signal can ever reach Tier B,
+  # the highest-converting signal in the taxonomy scores as low-quality outreach,
+  # and the Buddy Score punishes you for acting on it. tests/test_scoring.py has a
+  # guard for this — if you raise a threshold or lower a weight, it will tell you.
+  #
+  #   A  a compounding cluster, or three signals: contact this week
+  #   B  one heavy signal alone, or several light ones: worth working
+  #   C  one moderate signal: monitor
+  #   D  faint traces only
+  tiers:
+    - {name: A, min_score: 55}
+    - {name: B, min_score: 25}
+    - {name: C, min_score: 12}
+    - {name: D, min_score: 0}
+
+  # Confidence below this lands an AUTO-detected signal in the review queue instead
+  # of scoring it. "I'd rather confirm 10 real signals than be handed 100 uncertain ones."
+  auto_review_threshold: 0.70
+
+  # Manually entered signals face a much lower bar — you were there, you saw it.
+  # Only genuinely ambiguous notes get held back for you to confirm.
+  manual_review_threshold: 0.45
+  manual_default_confidence: 0.90
+
+  # Confidence gates whether a signal scores at all (above). Set this true to ALSO
+  # scale its weight by confidence. Off by default so a confirmed signal is not
+  # penalised twice for having once been uncertain.
+  confidence_scales_weight: false
+
+# ---------------------------------------------------------------------------
+# Buddy Score — leading indicator of pipeline health, 0-100.
+# Components must sum to 100.
+# ---------------------------------------------------------------------------
+buddy_score:
+  components:
+    progression: 30      # replies -> conversations -> meetings booked
+    signal_quality: 25   # % of outreach going to Tier A/B companies
+    volume: 25           # touches against your own target
+    consistency: 20      # active days, no gaps — steady beats bursts
+
+  # Volume target. Set deliberately low: this system trades touch count for
+  # research depth. Manual person-research is the bottleneck and that is by design.
+  weekly_touch_target: 15
+
+  # Consistency: how many distinct days per week you want to be active.
+  weekly_active_day_target: 4
+
+  # Progression: conversion rates that would earn full marks.
+  # Meetings are the terminal metric — cycles are far too long for orders to be
+  # usable feedback.
+  target_reply_rate: 0.15
+  target_conversation_rate: 0.08
+  target_meeting_rate: 0.05
+
+  # Which tiers count as "quality" outreach for the signal_quality component.
+  quality_tiers: [A, B]
+
+  # Trend direction is computed against this many prior periods.
+  trend_lookback_periods: 4
+
+# ---------------------------------------------------------------------------
+# Language model
+# ---------------------------------------------------------------------------
+# Requires ANTHROPIC_API_KEY in the environment (or a .env file next to this one).
+llm:
+  enabled: true
+
+  # Parsing a note into a structured signal is cheap extraction work.
+  parser_model: "claude-sonnet-4-6"
+  parser_effort: low          # low | medium | high | max — null disables thinking
+
+  # The coach reasons over your whole pipeline — worth the better model.
+  # (Coach ships in a later phase; the setting is read when it does.)
+  coach_model: "claude-opus-5"
+  coach_effort: high
+
+  max_tokens: 4000
+  timeout_seconds: 120
+
+  # If the API is unreachable or the key is missing, manual entry still works —
+  # notes are stored raw and flagged unparsed rather than lost.
+  fail_soft: true
+
+# ---------------------------------------------------------------------------
+# Server
+# ---------------------------------------------------------------------------
+server:
+  host: "127.0.0.1"
+  port: 8420
+  open_browser: true
+
+# ---------------------------------------------------------------------------
+# Storage
+# ---------------------------------------------------------------------------
+database:
+  # SQLite for v1. To move to Postgres, change this one line to e.g.
+  #   url: "postgresql+psycopg://user:pass@localhost/signal_engine"
+  # and run ./run.sh migrate. No application code changes.
+  url: "sqlite:///data/signal_engine.db"

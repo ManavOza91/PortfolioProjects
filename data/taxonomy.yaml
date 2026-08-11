@@ -1,0 +1,230 @@
+# Signal taxonomy — EDITABLE DATA, NOT CODE.
+#
+# Nothing in the application logic names a signal type. Add, remove, reweight or
+# rewrite anything here and the scoring engine, parser and dashboard follow.
+# A different instrument company replaces this file wholesale and the system is theirs.
+#
+# Reseed after editing:   ./run.sh seed
+# (Reseeding updates existing rows by `key` and adds new ones. It never deletes
+#  a type that already has signals attached — set `active: false` to retire one.)
+#
+# FIELDS
+#   key           stable identifier, referenced by signals. Never change it once in use.
+#   label         human-readable name, shown in the UI
+#   product_fit   A | B | both     (A = freeze-drying microscope, B = lyobead generator)
+#   base_weight   points contributed before decay and compounding
+#   sources       which detection paths may create this signal: manual, auto, or both
+#   decays        false = structural signal, holds full weight forever
+#   description   fed to the language model so it can recognise this signal in free text
+#   examples      short phrases that should map to this type (helps the parser)
+
+version: 1
+
+product_fit_labels:
+  A: "Product A (FDM) — freeze-drying microscope"
+  B: "Product B (LBP) — lyobead generator"
+  both: "Both products"
+
+signal_types:
+
+  - key: manual_diy_production_at_capacity
+    label: "Manual / DIY lyobead production at capacity"
+    product_fit: B
+    base_weight: 30
+    sources: manual
+    decays: true
+    description: >
+      The company is producing lyophilised beads by hand, with a home-built rig, or
+      with improvised equipment, and has hit or is approaching a throughput ceiling.
+      This is the single highest-converting signal and it appears in no public source —
+      it arrives only through human observation: a conversation, a LinkedIn reply,
+      a trade show chat. Treat any mention of DIY, in-house-built, manual, or
+      "we make them ourselves" bead production as this signal.
+    examples:
+      - "doing manual bead production"
+      - "built their own contraption for beads"
+      - "dripping by hand, can't keep up with demand"
+      - "in-house rig, maxed out"
+
+  - key: job_posting_relevant_science
+    label: "Job posting: assay dev, reagent formulation, lyophilisation"
+    product_fit: both
+    base_weight: 30
+    sources: both
+    decays: true
+    description: >
+      An open role in assay development, reagent formulation, lyophilisation,
+      freeze-drying, or drug product / MSAT work. Hiring in these functions means
+      the company is building or expanding exactly the capability both products serve.
+    examples:
+      - "hiring a lyophilisation scientist"
+      - "advertising for assay development lead"
+      - "two open reagent formulation roles"
+
+  - key: new_lyo_capacity
+    label: "New lyo capacity / fill-finish line / sterile injectable site"
+    product_fit: A
+    base_weight: 30
+    sources: both
+    decays: true
+    description: >
+      Investment in lyophilisation capacity: a new freeze-dryer, a fill-finish line,
+      a sterile injectable facility, or expansion of an existing lyo suite. Directly
+      implies cycle development work, which is what the freeze-drying microscope serves.
+    examples:
+      - "commissioning a new fill-finish line"
+      - "installed two new production lyophilisers"
+      - "opening a sterile injectables site"
+
+  - key: competitor_dissatisfaction
+    label: "Competitor dissatisfaction"
+    product_fit: both
+    base_weight: 28
+    sources: manual
+    decays: true
+    description: >
+      The company uses a competing instrument and is unhappy with it — reliability,
+      support, throughput, data quality, or cost. Human-observed only. Also covers
+      a company that bought a competitor's unit previously and is now re-evaluating.
+    examples:
+      - "they have a competitor unit and hate it"
+      - "unhappy with their current supplier's service"
+      - "lost to a competitor in 2024, now re-engaging"
+
+  - key: format_shift_to_bead
+    label: "Moving from cake/vial format to bead format"
+    product_fit: B
+    base_weight: 28
+    sources: manual
+    decays: true
+    description: >
+      The company is shifting, or evaluating a shift, from lyophilised cake or vial
+      format to a unit-dose bead format. A deliberate format decision that only the
+      bead generator serves.
+    examples:
+      - "looking at moving from vials to beads"
+      - "evaluating unit-dose bead format for the new panel"
+
+  - key: regulatory_submission
+    label: "Regulatory submission (510(k) / De Novo / EUA / CE-IVDR)"
+    product_fit: B
+    base_weight: 25
+    sources: both
+    decays: true
+    description: >
+      A diagnostic regulatory filing or clearance — FDA 510(k), De Novo, EUA, or
+      CE marking under IVDR. Indicates a product approaching or entering commercial
+      manufacture, where reagent stability and unit-dose format decisions get made.
+    examples:
+      - "510(k) cleared for their respiratory panel"
+      - "submitted a De Novo"
+      - "CE-IVDR marking obtained"
+
+  - key: assay_kit_panel_launch
+    label: "New assay, kit or panel launch"
+    product_fit: B
+    base_weight: 22
+    sources: auto
+    decays: true
+    description: >
+      Launch or announced launch of a new assay, test kit, or multiplex panel.
+      Commercial manufacture of reagents follows.
+    examples:
+      - "launched a new multiplex respiratory panel"
+      - "announced a point-of-care kit"
+
+  - key: phase_1_parenteral
+    label: "Phase 1 entry, parenteral biologic format"
+    product_fit: A
+    base_weight: 20
+    sources: auto
+    decays: true
+    description: >
+      A biologic or parenteral drug candidate entering Phase 1. Formulation and
+      lyophilisation cycle design work happens around this point.
+    examples:
+      - "entered Phase 1 with their lead biologic"
+      - "first-in-human for an injectable mAb"
+
+  - key: multi_product_pipeline
+    label: "Multi-product pipeline disclosed"
+    product_fit: both
+    base_weight: 18
+    sources: both
+    decays: false   # STRUCTURAL — a broad pipeline does not stop being broad
+    description: >
+      The company has disclosed multiple products or programmes in development.
+      A repeat-buyer indicator: more programmes means more formulation work and
+      a higher chance of a second and third unit. Structural — does not decay.
+    examples:
+      - "four programmes in their pipeline"
+      - "pipeline spans three assay families"
+
+  - key: iso13485_facility_expansion
+    label: "ISO 13485 / cleanroom / facility expansion"
+    product_fit: B
+    base_weight: 18
+    sources: auto
+    decays: true
+    description: >
+      ISO 13485 certification, cleanroom build-out, or general manufacturing
+      facility expansion. Signals a move from development toward regulated
+      commercial production.
+    examples:
+      - "achieved ISO 13485 certification"
+      - "opened a new cleanroom suite"
+
+  - key: funding_scale_up
+    label: "Funding round with scale-up or commercialisation language"
+    product_fit: both
+    base_weight: 15
+    sources: auto
+    decays: true
+    description: >
+      A funding round where the stated use of proceeds mentions scale-up,
+      manufacturing, or commercialisation. A QUALIFIER, not a trigger — it indicates
+      affordability and scaling intent. Never surface a company on funding alone.
+    examples:
+      - "raised Series B to scale manufacturing"
+      - "$40M to commercialise their platform"
+
+  - key: grant_award
+    label: "Grant award (SBIR, Innovate UK, EU Horizon)"
+    product_fit: both
+    base_weight: 15
+    sources: auto
+    decays: true
+    description: >
+      A non-dilutive grant award — SBIR/STTR, Innovate UK, EU Horizon, or similar.
+      Same qualifier logic as funding: money exists and a specific programme is funded.
+    examples:
+      - "won an SBIR Phase II"
+      - "Innovate UK grant for diagnostic development"
+
+  - key: publication_stability_lyo
+    label: "Publication mentioning reagent stability or freeze-drying"
+    product_fit: both
+    base_weight: 10
+    sources: auto
+    decays: true
+    description: >
+      A paper, preprint or poster from the company touching reagent stability,
+      ambient/cold-chain-free shipping, lyophilisation, or freeze-drying.
+      Evidence that someone there is working the problem.
+    examples:
+      - "published on ambient-stable reagents"
+      - "poster on collapse temperature determination"
+
+  - key: conference_presentation
+    label: "Conference presentation or exhibition"
+    product_fit: both
+    base_weight: 8
+    sources: both
+    decays: true
+    description: >
+      The company is presenting at or exhibiting at a relevant conference
+      (lyophilisation, formulation, IVD, diagnostics). Weak on its own; useful
+      as a compounding signal and as a reason to make contact.
+    examples:
+      - "exhibiting at LyoTalk"
+      - "presenting at AACC"

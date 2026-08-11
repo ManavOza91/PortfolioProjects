@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty %}
+{% set nav = "review" %}
+{% block title %}Review — Signal Engine{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <div>
+    <h1>Review queue</h1>
+    <div class="sub">
+      Records held back rather than scored: below the confidence bar, or containing
+      nothing scoreable. Ten confirmed signals beat a hundred uncertain ones.
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-body tight">
+    {% if items %}
+      {% for signal, company in items %}
+        <div style="padding:14px 16px; border-bottom:1px solid var(--line)">
+          <div style="display:flex; gap:10px; align-items:baseline; flex-wrap:wrap">
+            <strong><a href="/company/{{ company.id }}">{{ company.name }}</a></strong>
+            <span class="pill warn">{{ signal.status }}</span>
+            <span class="small muted">
+              {{ signal.detected_date.strftime('%d %b %Y') }} &middot;
+              {{ signal.source }}
+              {%- if signal.confidence %} &middot; confidence {{ '%.0f'|format(signal.confidence * 100) }}%{% endif %}
+            </span>
+          </div>
+
+          {% if signal.parsed_summary %}
+            <div style="margin-top:6px">{{ signal.parsed_summary }}</div>
+          {% endif %}
+          {% if signal.raw_text %}
+            <div class="rawtext" style="margin-top:8px">{{ signal.raw_text }}</div>
+          {% endif %}
+
+          <form method="post" action="/review/{{ signal.id }}" style="margin-top:10px; display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap">
+            <div class="field" style="margin-bottom:0; min-width:280px; flex:1">
+              <label>Confirm as</label>
+              <select name="type_key">
+                <option value="">— pick a signal type —</option>
+                {% for t in taxonomy.types %}
+                  <option value="{{ t.key }}" {{ 'selected' if t.key == signal.type_key }}>
+                    {{ t.label }} ({{ '%g'|format(t.base_weight) }} pts, product {{ t.product_fit }})
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="submit" name="action" value="accept">Confirm and score</button>
+            <button type="submit" name="action" value="reject" class="ghost">Not a signal</button>
+          </form>
+        </div>
+      {% endfor %}
+    {% else %}
+      {{ empty('Nothing to review.',
+               'Automatically detected signals below the confidence threshold, and notes
+                where nothing scoreable was found, land here for you to confirm or dismiss.') }}
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

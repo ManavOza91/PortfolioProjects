@@ -1,0 +1,53 @@
+{% macro tier_badge(tier) %}
+  {% if tier %}<span class="tier tier-{{ tier }}">TIER {{ tier }}</span>{% endif %}
+{% endmacro %}
+
+
+{% macro queue_row(row, show_research=True) %}
+<div class="qrow">
+  <div class="score">{{ '%.0f'|format(row.score) }}</div>
+
+  <div class="qmain">
+    <div class="qname"><a href="/company/{{ row.company.id }}">{{ row.company.name }}</a></div>
+    <div class="qreason">{{ row.reason }}</div>
+
+    <div class="qmeta">
+      {% if row.breakdown.compounding_applied %}
+        <span class="pill hot">compounding &times;{{ '%.2f'|format(row.breakdown.multiplier) }}</span>
+      {% endif %}
+      <span>{{ row.breakdown.signal_count }} live signal{{ '' if row.breakdown.signal_count == 1 else 's' }}</span>
+      {% if row.breakdown.product_fit %}<span>Product {{ row.breakdown.product_fit }}</span>{% endif %}
+      {% if row.company.country %}<span>{{ row.company.country }}</span>{% endif %}
+      {% if row.never_contacted %}
+        <span class="pill">never contacted</span>
+      {% else %}
+        <span>last touch {{ row.days_since_touch }}d ago</span>
+      {% endif %}
+      {% if row.contact_count == 0 %}
+        <span class="pill warn">no contact yet</span>
+      {% else %}
+        <span>{{ row.contact_count }} contact{{ '' if row.contact_count == 1 else 's' }}</span>
+      {% endif %}
+    </div>
+
+    {% if show_research and row.contact_count == 0 %}
+      <div class="research">{{ row.research_action }}</div>
+    {% endif %}
+  </div>
+
+  <div class="qside">
+    {{ tier_badge(row.tier) }}
+    {% if row.breakdown.last_signal_date %}
+      <span class="small muted">newest signal {{ row.breakdown.last_signal_date.strftime('%d %b %Y') }}</span>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+
+{% macro empty(title, body) %}
+<div class="empty">
+  <strong>{{ title }}</strong>
+  {{ body }}
+</div>
+{% endmacro %}

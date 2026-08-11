@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% set nav = "add" %}
+{% block title %}Add — Signal Engine{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <div>
+    <h1>Add</h1>
+    <div class="sub">
+      One mechanism, three entry points. Write it the way you'd say it — the parser
+      extracts the signal, and the raw text is kept either way.
+    </div>
+  </div>
+</div>
+
+<div class="grid side">
+  <div>
+    <!-- ============ 1. Company / signal note ============ -->
+    <div class="panel">
+      <h2>Company note <span class="sub">the highest-converting signals only ever arrive this way</span></h2>
+      <div class="panel-body">
+        <form method="post" action="/add/note">
+          <div class="row">
+            <div class="field">
+              <label>Company</label>
+              <input type="text" name="company_name" list="known-companies"
+                     value="{{ prefill_company }}" placeholder="e.g. Northwind Diagnostics" autocomplete="off">
+              <datalist id="known-companies">
+                {% for c in companies %}<option value="{{ c.name }}">{% endfor %}
+              </datalist>
+              <div class="hint">Leave blank and the parser will try to pull it from your note.</div>
+            </div>
+            <div class="field">
+              <label>Website <span class="muted">(optional)</span></label>
+              <input type="text" name="company_domain" placeholder="northwinddx.com">
+            </div>
+          </div>
+
+          <div class="field">
+            <label>What did you learn?</label>
+            <textarea name="note" rows="6" required
+              placeholder="Met at LyoTalk. Doing manual bead production and can't keep up — they've built their own rig. Evaluating a machine next year. Also mentioned they're unhappy with their current supplier's support."></textarea>
+            <div class="hint">
+              Manual or DIY production at capacity, competitor dissatisfaction, and format
+              shifts appear in no public database. They arrive only through a conversation,
+              a LinkedIn reply, or a trade show chat — which is what this box is for.
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>When observed <span class="muted">(optional)</span></label>
+              <input type="date" name="detected_date">
+              <div class="hint">Blank lets the parser resolve dates mentioned in the note.</div>
+            </div>
+            <div class="field">
+              <label>How you learned it</label>
+              <select name="source">
+                <option value="manual">conversation / observation</option>
+                <option value="event">trade show or conference</option>
+                <option value="inbound">inbound enquiry</option>
+              </select>
+            </div>
+          </div>
+
+          <details style="margin-bottom:12px">
+            <summary class="small muted" style="cursor:pointer">Add a contact at the same time (optional)</summary>
+            <div style="padding-top:12px">
+              <div class="row">
+                <div class="field"><label>Name</label><input type="text" name="contact_name"></div>
+                <div class="field"><label>Job title</label><input type="text" name="contact_title"></div>
+              </div>
+              <div class="row">
+                <div class="field"><label>Email</label><input type="email" name="contact_email"></div>
+                <div class="field"><label>LinkedIn URL</label><input type="url" name="contact_linkedin"></div>
+              </div>
+            </div>
+          </details>
+
+          <button type="submit">Parse and save</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ============ 3. Manager insight ============ -->
+    <div class="panel">
+      <h2>Manager insight <span class="sub">a segment-level rule, not a company</span></h2>
+      <div class="panel-body">
+        <form method="post" action="/add/insight">
+          <div class="field">
+            <textarea name="text" rows="3" required
+              placeholder="Nordic POC respiratory developers are scaling fast — three asked about ambient shipping."></textarea>
+            <div class="hint">
+              Parsed into a rule with a segment, geography, weight adjustment and a
+              90-day expiry by default, so stale intuitions age out instead of quietly
+              distorting scores.
+            </div>
+          </div>
+          <button type="submit" class="ghost">Save rule</button>
+        </form>
+
+        {% if insights %}
+          <div style="margin-top:16px">
+            <h3>Recent rules</h3>
+            <table>
+              {% for i in insights %}
+                <tr>
+                  <td>
+                    {{ i.parsed_summary or i.raw_text }}
+                    <div class="small muted">
+                      {{ i.parsed_segment or 'no segment' }}
+                      {%- if i.parsed_geography %} &middot; {{ i.parsed_geography }}{% endif %}
+                      &middot; {{ '%+g'|format(i.weight_adjustment) }} pts
+                      &middot; {{ 'expires ' + i.expiry_date.strftime('%d %b %Y') if i.expiry_date else 'no expiry' }}
+                    </div>
+                  </td>
+                  <td class="num">
+                    <span class="pill {{ 'warn' if not i.active }}">{{ 'active' if i.active else 'inactive' }}</span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </table>
+            <div class="hint" style="margin-top:10px">
+              Rules are stored and expire on schedule. Applying them to scores, and scoring
+              them against outcomes, is phase 8 — deliberately after the core loop works.
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2. Bare company ============ -->
+  <div>
+    <div class="panel">
+      <h2>Company only <span class="sub">goes on the watchlist, unscored</span></h2>
+      <div class="panel-body">
+        <form method="post" action="/add/company">
+          <div class="field"><label>Name</label><input type="text" name="name" required></div>
+          <div class="field"><label>Website</label><input type="text" name="domain"></div>
+          <div class="row">
+            <div class="field"><label>Country</label><input type="text" name="country"></div>
+            <div class="field"><label>Segment</label><input type="text" name="segment"></div>
+          </div>
+          <button type="submit" class="ghost">Add to watchlist</button>
+          <div class="hint">
+            A watchlist entry has no score and never appears in the queue. It enters the
+            pipeline the moment a signal fires against it — never because it is on a list.
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>What the parser looks for</h2>
+      <div class="panel-body">
+        <p class="small muted" style="margin-top:0">
+          The taxonomy is data, not code. See or edit the full list on the
+          <a href="/taxonomy">Taxonomy page</a> or in <code>data/taxonomy.yaml</code>.
+        </p>
+        <p class="small muted">
+          If a note contains nothing scoreable it is saved with no score rather than
+          given a made-up one. That is deliberate — an empty result is a correct answer.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

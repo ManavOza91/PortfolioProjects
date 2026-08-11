@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% set nav = "taxonomy" %}
+{% block title %}Taxonomy — Signal Engine{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <div>
+    <h1>Signal taxonomy</h1>
+    <div class="sub">
+      This is data, not code. Edit <code>data/taxonomy.yaml</code> and run
+      <code>./run.sh seed</code> — nothing in the application names a signal type, so
+      another instrument company can replace this list wholesale and the system is theirs.
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-body tight overflow">
+    <table>
+      <tr>
+        <th>Signal</th>
+        <th class="num">Weight</th>
+        <th>Product</th>
+        <th>Source</th>
+        <th>Decay</th>
+        <th class="num">In use</th>
+      </tr>
+      {% for t in rows %}
+        <tr {{ 'style=opacity:0.5' if not t.active }}>
+          <td>
+            <strong>{{ t.label }}</strong>
+            <div class="small muted">{{ t.description }}</div>
+            <div class="small muted" style="font-family:var(--mono); font-size:11.5px">{{ t.key }}</div>
+          </td>
+          <td class="num">{{ '%g'|format(t.base_weight) }}</td>
+          <td>{{ t.product_fit }}</td>
+          <td>{{ t.sources }}</td>
+          <td>
+            {% if t.decays %}
+              <span class="small muted">slow</span>
+            {% else %}
+              <span class="pill">structural</span>
+            {% endif %}
+          </td>
+          <td class="num">{{ counts.get(t.key, 0) }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Scoring rules in force</h2>
+  <div class="panel-body">
+    <table>
+      <tr>
+        <td>Decay</td>
+        <td>
+          Retain {{ '%.0f'|format(cfg.decay.rate_per_quarter * 100) }}% of weight per quarter,
+          floored at {{ '%.0f'|format(cfg.decay.floor * 100) }}% of the original. Never reaches zero.
+        </td>
+      </tr>
+      <tr>
+        <td>Compounding</td>
+        <td>
+          {{ '%g'|format(cfg.compounding.multiplier) }}&times; when
+          {{ '2 or more independent signals' if cfg.compounding.require_distinct_types else '2 or more signals' }}
+          fall within {{ cfg.compounding.window_days }} days.
+        </td>
+      </tr>
+      <tr>
+        <td>Tiers</td>
+        <td>
+          {% for t in cfg.tiers %}Tier {{ t.name }} at {{ '%g'|format(t.min_score) }}+{{ ', ' if not loop.last }}{% endfor %}
+        </td>
+      </tr>
+      <tr>
+        <td>Review threshold</td>
+        <td>
+          Auto-detected signals score at {{ '%.0f'|format(cfg.auto_review_threshold * 100) }}%
+          confidence or above; below that they queue for review. Manual entries face a
+          lower bar because you were there.
+        </td>
+      </tr>
+      <tr>
+        <td>Exclusions</td>
+        <td><strong>None.</strong> Entry is earned by evidence, never denied by category.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

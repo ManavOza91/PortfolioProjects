@@ -1,0 +1,47 @@
+# CSV column mapping.
+#
+# You often will not need this file at all. The importer recognises common header
+# names on its own — "Company", "Company Name", "Website", "Email", "LinkedIn",
+# "Title", and so on, case-insensitively. Try `./run.sh import --dry-run` first.
+#
+# If it cannot find a column, copy this file to data/mapping.yaml and edit the
+# right-hand side to match YOUR headers exactly.
+#
+#   LEFT  = the field the system wants (do not change these)
+#   RIGHT = the column header in your CSV (change these)
+#
+# The right-hand side may also be a LIST, and the first header that exists wins —
+# handy when two exports use different names for the same thing.
+
+companies:
+  # Which file(s) in data/import/ hold companies. Omit this and the importer picks
+  # up any CSV with "company" in its filename.
+  file: companies.csv
+
+  columns:
+    name: "Company Name"
+    domain: ["Website", "Domain"]
+    country: "Country"
+    segment: "Segment"
+    size_band: "Company Size"
+    notes: "Notes"
+
+contacts:
+  file: contacts.csv
+
+  columns:
+    # Either full_name, or first_name + last_name — the importer joins them.
+    full_name: "Full Name"
+    # first_name: "First Name"
+    # last_name: "Last Name"
+
+    job_title: ["Job Title", "Title"]
+    email: "Email"
+    linkedin_url: ["LinkedIn URL", "LinkedIn"]
+    country: "Country"
+    persona: "Persona"
+    notes: "Notes"
+
+    # How each contact row points at its company. At least one of these is required.
+    company_name: "Company"
+    company_domain: "Company Website"

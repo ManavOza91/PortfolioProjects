@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_macros.html" import queue_row, empty %}
+{% set nav = "companies" %}
+{% block title %}Queue — Signal Engine{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <div>
+    <h1>Company queue</h1>
+    <div class="sub">
+      {{ queue|length }} shown.
+      {{ totals.signalled_companies }} of {{ totals.companies }} companies have a live signal;
+      the rest are watchlist entries and do not enter the pipeline until one fires.
+    </div>
+  </div>
+  <a href="/add" class="btn">Add a note</a>
+</div>
+
+<div class="filters">
+  <a href="/companies{{ '?show_all=1' if show_all }}" class="{{ 'on' if not tier and not product }}">All tiers</a>
+  {% for t in ['A', 'B', 'C', 'D'] %}
+    <a href="/companies?tier={{ t }}{{ '&show_all=1' if show_all }}" class="{{ 'on' if tier == t }}">Tier {{ t }}</a>
+  {% endfor %}
+  <span style="width:14px"></span>
+  {% for p, label in [('A', 'Product A'), ('B', 'Product B')] %}
+    <a href="/companies?product={{ p }}{{ '&show_all=1' if show_all }}" class="{{ 'on' if product == p }}">{{ label }}</a>
+  {% endfor %}
+  <span style="width:14px"></span>
+  <a href="/companies?{{ '' if show_all else 'show_all=1' }}" class="{{ 'on' if show_all }}">
+    {{ 'Hide' if show_all else 'Show' }} unsignalled watchlist
+  </a>
+</div>
+
+<div class="panel">
+  <div class="panel-body tight">
+    {% if queue %}
+      <div class="queue">
+        {% for row in queue %}{{ queue_row(row) }}{% endfor %}
+      </div>
+    {% else %}
+      {{ empty('Nothing matches.',
+               'Try clearing the filters, or turn on the unsignalled watchlist to see
+                companies that are being monitored but have not produced a signal.') }}
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

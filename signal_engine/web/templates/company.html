@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% from "_macros.html" import tier_badge, empty %}
+{% set nav = "companies" %}
+{% block title %}{{ company.name }} — Signal Engine{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <div>
+    <h1>{{ company.name }} {{ tier_badge(breakdown.tier) }}</h1>
+    <div class="sub">
+      {% if company.domain %}<a href="https://{{ company.domain }}" target="_blank" rel="noopener">{{ company.domain }}</a> &middot; {% endif %}
+      {{ company.country or 'country unknown' }} &middot;
+      {{ company.segment or 'segment unknown' }} &middot;
+      status {{ company.status }}
+      {% if breakdown.product_fit %} &middot; points at Product {{ breakdown.product_fit }}{% endif %}
+    </div>
+  </div>
+  <div style="text-align:right">
+    <div class="buddy-number" style="font-size:42px">{{ '%.0f'|format(breakdown.score) }}</div>
+    <div class="small muted">
+      {{ '%.1f'|format(breakdown.raw_sum) }} raw
+      {%- if breakdown.compounding_applied %} &times; {{ '%.2f'|format(breakdown.multiplier) }}{% endif %}
+    </div>
+  </div>
+</div>
+
+{% if breakdown.compounding_reason %}
+  <div class="flash">{{ breakdown.compounding_reason }}</div>
+{% endif %}
+
+<div class="grid side">
+  <div>
+    <!-- ============ Score breakdown ============ -->
+    <div class="panel">
+      <h2>Score breakdown <span class="sub">every point traced to a signal</span></h2>
+      <div class="panel-body">
+        {% if breakdown.contributions %}
+          {% for c in breakdown.contributions|sort(attribute='effective_weight', reverse=True) %}
+            <div class="contribution">
+              <div>
+                <strong>{{ c.label }}</strong>
+                {% if not c.decays %}<span class="pill">structural, never decays</span>{% endif %}
+                {% if c.expired %}<span class="pill warn">past expiry, held at floor</span>{% endif %}
+                {% if c.summary %}<div class="small muted">{{ c.summary }}</div>{% endif %}
+                <div class="small muted">
+                  {{ c.detected_date.strftime('%d %b %Y') }} &middot; {{ c.age_days }} days old &middot; via {{ c.source }}
+                </div>
+              </div>
+              <div class="decay">
+                {{ '%.0f'|format(c.base_weight) }} pts<br>
+                &times;{{ '%.2f'|format(c.decay_factor) }}
+              </div>
+              <div class="eff">{{ '%.1f'|format(c.effective_weight) }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          {{ empty('No live signals.',
+                   'This company is on the watchlist. It has no score and will not appear
+                    in the queue until something fires. Add a note below if you learn something.') }}
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ============ All signal records ============ -->
+    <div class="panel">
+      <h2>Signal records <span class="sub">raw text is kept alongside every parse</span></h2>
+      <div class="panel-body tight">
+        {% if signals %}
+          {% for s in signals %}
+            <div style="padding:12px 16px; border-bottom:1px solid var(--line)">
+              <div style="display:flex; gap:10px; align-items:baseline; flex-wrap:wrap">
+                <strong>{{ s.parsed_summary or s.type_key or 'Unparsed observation' }}</strong>
+                <span class="pill {{ 'warn' if s.status in ('review', 'unscored') }}">{{ s.status }}</span>
+                <span class="small muted">
+                  {{ s.detected_date.strftime('%d %b %Y') }} &middot;
+                  {{ s.source }} &middot;
+                  weight {{ '%.0f'|format(s.weight) }} &middot;
+                  confidence {{ '%.0f'|format(s.confidence * 100) ~ '%' if s.confidence else '—' }}
+                </span>
+              </div>
+              {% if s.raw_text %}
+                <details style="margin-top:8px">
+                  <summary class="small muted" style="cursor:pointer">raw note</summary>
+                  <div class="rawtext" style="margin-top:6px">{{ s.raw_text }}</div>
+                </details>
+              {% endif %}
+              {% if s.status == 'unscored' and s.raw_text %}
+                <form method="post" action="/company/{{ company.id }}/reparse/{{ s.id }}" style="margin-top:8px">
+                  <button class="ghost small" type="submit">Try parsing this again</button>
+                </form>
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% else %}
+          {{ empty('No signal records.', 'Nothing has been observed about this company yet.') }}
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ============ Activity ============ -->
+    <div class="panel">
+      <h2>Activity</h2>
+      <div class="panel-body tight">
+        {% if activities %}
+          <table>
+            <tr><th>Date</th><th>Type</th><th>Outcome</th><th>Tier then</th><th>Notes</th></tr>
+            {% for a in activities %}
+              <tr>
+                <td class="small" style="white-space:nowrap">{{ a.date.strftime('%d %b %y') }}</td>
+                <td>{{ a.type }}{% if a.direction == 'in' %} <span class="muted small">(in)</span>{% endif %}</td>
+                <td>{{ a.outcome or '—' }}</td>
+                <td>{{ a.company_tier_at_time_of_contact or '—' }}</td>
+                <td class="small muted">{{ a.notes or '' }}</td>
+              </tr>
+            {% endfor %}
+          </table>
+        {% else %}
+          {{ empty('No touches logged.', 'Log outreach below so the Buddy Score and conversion reporting can see it.') }}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Sidebar ============ -->
+  <div>
+    <details class="card" open>
+      <summary>Log a touch</summary>
+      <div class="inner">
+        <form method="post" action="/company/{{ company.id }}/activity">
+          <div class="row">
+            <div class="field">
+              <label>Type</label>
+              <select name="type">
+                {% for t in ['email', 'call', 'linkedin', 'meeting', 'reply', 'note'] %}
+                  <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field">
+              <label>Direction</label>
+              <select name="direction">
+                <option value="out">outbound</option>
+                <option value="in">inbound</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Date</label>
+              <input type="date" name="date" value="{{ today.isoformat() }}">
+            </div>
+            <div class="field">
+              <label>Outcome</label>
+              <select name="outcome">
+                <option value="">—</option>
+                <option value="no_response">no response</option>
+                <option value="reply">reply</option>
+                <option value="conversation">conversation</option>
+                <option value="meeting_booked">meeting booked</option>
+                <option value="declined">declined</option>
+              </select>
+            </div>
+          </div>
+          {% if contacts %}
+            <div class="field">
+              <label>Contact</label>
+              <select name="contact_id">
+                <option value="">—</option>
+                {% for c in contacts %}
+                  <option value="{{ c.id }}">{{ c.full_name or c.email or c.linkedin_url }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          {% endif %}
+          <div class="field">
+            <label>Notes</label>
+            <textarea name="notes" rows="2" style="min-height:52px"></textarea>
+          </div>
+          <button type="submit">Log it</button>
+          <div class="hint">
+            Records Tier {{ breakdown.tier or '—' }} as it stands today, so later rescoring
+            cannot rewrite whether this was signal-driven.
+          </div>
+        </form>
+      </div>
+    </details>
+
+    <details class="card" {{ 'open' if not breakdown.contributions }}>
+      <summary>Add a note about this company</summary>
+      <div class="inner">
+        <form method="post" action="/add/note">
+          <input type="hidden" name="company_name" value="{{ company.name }}">
+          <div class="field">
+            <textarea name="note" rows="5" placeholder="What did you learn? e.g. Met at LyoTalk. Doing manual bead production, evaluating a machine next year."></textarea>
+          </div>
+          <div class="field">
+            <label>Date observed <span class="muted">(optional)</span></label>
+            <input type="date" name="detected_date">
+          </div>
+          <button type="submit">Parse and save</button>
+        </form>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary>Contacts ({{ contacts|length }})</summary>
+      <div class="inner">
+        {% for c in contacts %}
+          <div style="padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid var(--line)">
+            <strong>{{ c.full_name or '(no name)' }}</strong>
+            <div class="small muted">{{ c.job_title or 'title unknown' }}</div>
+            {% if c.email %}<div class="small">{{ c.email }}</div>{% endif %}
+            {% if c.linkedin_url %}<div class="small"><a href="{{ c.linkedin_url }}" target="_blank" rel="noopener">LinkedIn</a></div>{% endif %}
+          </div>
+        {% else %}
+          <p class="small muted" style="margin-top:0">
+            No contacts. Finding the right person here is a manual research step — and it is
+            the step that produces your best outreach.
+          </p>
+        {% endfor %}
+
+        <form method="post" action="/company/{{ company.id }}/contact">
+          <div class="row">
+            <div class="field"><label>Name</label><input type="text" name="full_name"></div>
+            <div class="field"><label>Job title</label><input type="text" name="job_title"></div>
+          </div>
+          <div class="field"><label>Email</label><input type="email" name="email"></div>
+          <div class="field"><label>LinkedIn URL</label><input type="url" name="linkedin_url"></div>
+          <button type="submit" class="ghost">Save contact</button>
+        </form>
+      </div>
+    </details>
+
+    {% if company.notes %}
+      <div class="panel">
+        <h2>Imported notes</h2>
+        <div class="panel-body"><div class="rawtext">{{ company.notes }}</div></div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
