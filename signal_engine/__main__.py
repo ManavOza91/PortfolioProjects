@@ -140,6 +140,10 @@ def cmd_detect(args) -> int:
 
     discover = True if args.discover else None
 
+    if args.backfill and since is not None:
+        print("Use --backfill or --since, not both. --since is the more specific one.")
+        return 1
+
     with session_scope() as session:
         report = run_detection(
             session,
@@ -147,6 +151,7 @@ def cmd_detect(args) -> int:
             since=since,
             dry_run=args.dry_run,
             discover=discover,
+            backfill=args.backfill,
         )
         print()
         print(report.render())
@@ -245,6 +250,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="limit to one source (openfda, sbir, news). Repeatable. Default: all.",
     )
     p.add_argument("--since", help="only look at records dated on or after YYYY-MM-DD")
+    p.add_argument(
+        "--backfill", action="store_true",
+        help="sweep the last 24 months instead of the default 90 days — the first run",
+    )
     p.add_argument("--dry-run", action="store_true", help="show what would be found, write nothing")
     p.add_argument(
         "--discover", action="store_true",

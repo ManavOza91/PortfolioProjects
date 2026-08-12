@@ -165,6 +165,13 @@ detection:
   # How far back to look when you don't pass --since.
   default_lookback_days: 90
 
+  # BACKFILL (`detect --backfill`) — the first-run sweep. Capital cycles run 6
+  # months to 2 years, so a signal from 20 months ago is still live: it decays to
+  # the floor, it does not disappear. 24 months is the whole cycle.
+  # Note: only openFDA and SBIR hold history. Google News RSS returns recent items
+  # only, so a backfill deepens the regulatory sources, not the press.
+  backfill_months: 24
+
   # DISCOVERY finds companies not already in your database. Off by default: it is
   # far noisier, and everything it finds is a company you have never assessed.
   # Turn on here, or per-run with --discover.
@@ -189,7 +196,9 @@ detection:
       endpoints:
         - {name: "510(k)", url: "https://api.fda.gov/device/510k.json", type_key: regulatory_submission}
         - {name: "De Novo", url: "https://api.fda.gov/device/registrationlisting.json", type_key: regulatory_submission}
-      max_results_per_company: 20
+      # A 24-month backfill on a large filer can exceed this; the run says so when
+      # it happens rather than silently truncating.
+      max_results_per_company: 50
       # Discovery mode only: device-name keywords worth surfacing.
       discovery_keywords: ["lyophilized", "lyophilised", "freeze-dried", "reagent bead"]
 
@@ -217,13 +226,22 @@ detection:
   keywords:
     new_lyo_capacity:
       ["fill-finish", "fill finish", "lyophilization capacity", "lyophilisation capacity",
-       "freeze dryer", "freeze-dryer", "sterile injectable", "aseptic facility"]
+       "freeze dryer", "freeze-dryer", "sterile injectable", "aseptic facility",
+       # Added after checking against companies that actually converted: they
+       # announce capacity in contract-manufacturing language, not lyo language.
+       "cdmo", "contract manufacturing", "contract manufacturer", "manufacturing capacity",
+       "scalable manufacturing", "scale up manufacturing", "manufacturing scale-up",
+       "new production line"]
     regulatory_submission:
       ["510(k)", "de novo", "fda clearance", "fda clearing", "ce-ivdr", "ivdr", "eua"]
     assay_kit_panel_launch:
-      ["launches assay", "new assay", "test kit", "multiplex panel", "diagnostic panel"]
+      ["launches assay", "new assay", "test kit", "multiplex panel", "diagnostic panel",
+       "pcr panel", "pcr test", "launches diagnostic", "new diagnostic",
+       "next-generation diagnostic", "diagnostic innovations"]
     funding_scale_up:
-      ["series a", "series b", "series c", "raises", "funding round", "scale up manufacturing"]
+      # "scale up manufacturing" moved to new_lyo_capacity — it describes capacity,
+      # not money, and funding is a qualifier rather than a trigger.
+      ["series a", "series b", "series c", "raises", "funding round"]
     grant_award:
       ["sbir", "sttr", "innovate uk", "horizon europe", "grant award", "awarded a grant"]
     iso13485_facility_expansion:

@@ -65,6 +65,18 @@ class OpenFDADetector:
                 if not payload:
                     continue
 
+                total = (
+                    payload.get("meta", {}).get("results", {}).get("total", 0)
+                )
+                if total > limit:
+                    # Silently keeping the first 50 of 90 clearances would look like
+                    # a complete history when it is not. Say so.
+                    result.warnings.append(
+                        f"{company}: {total} {label} records in this period, "
+                        f"only the first {limit} were read "
+                        f"(raise detection.sources.openfda.max_results_per_company)"
+                    )
+
                 for row in payload.get("results", []):
                     detection = self._to_detection(row, type_key, label)
                     if detection:

@@ -320,6 +320,66 @@ def test_an_unknown_signal_type_is_never_invented(session, make_company, fake_so
     assert not report.scored
 
 
+def test_backfill_reaches_back_two_years_not_ninety_days(
+    session, make_company, fake_source
+):
+    from signal_engine.config import get_config
+
+    make_company("Northwind Diagnostics")
+    fake_source(watchlist=[])
+
+    normal = runner.run_detection(session, sources=["openfda"], dry_run=True)
+    deep = runner.run_detection(
+        session, sources=["openfda"], dry_run=True, backfill=True
+    )
+
+    months = int(get_config().detection.get("backfill_months", 24))
+    span_days = (normal.since - deep.since).days
+    assert span_days > 500, "a backfill must cover the whole capital cycle"
+    assert abs((TODAY - deep.since).days - months * 30.44) < 40 or deep.backfill
+
+
+def test_an_old_signal_still_counts_but_decayed(session, make_company, fake_source):
+    """The point of the backfill: 20 months ago is faded, not gone."""
+    make_company("Northwind Diagnostics")
+    old = _detection(
+        "Northwind Diagnostics",
+        detected_date=dt.date.today() - dt.timedelta(days=600),
+        url="https://example.test/old",
+    )
+    fake_source(watchlist=[old])
+
+    report = runner.run_detection(session, sources=["openfda"], backfill=True)
+
+    assert len(report.scored) == 1
+
+    from signal_engine.models import Company
+    from sqlalchemy import select
+
+    company = session.scalar(select(Company).where(Company.name == "Northwind Diagnostics"))
+    assert company.current_score > 0, "a decayed signal must never reach zero"
+    assert company.current_score < 25.0, "and it must be worth less than a fresh one"
+
+
+def test_a_truncated_source_says_so_instead_of_looking_complete(
+    session, make_company, monkeypatch
+):
+    make_company("Northwind Diagnostics")
+
+    class Truncated(FakeDetector):
+        def for_companies(self, names, since):
+            return base.DetectorResult(
+                warnings=["Northwind Diagnostics: 90 records, only the first 50 were read"],
+                queries_made=1,
+            )
+
+    monkeypatch.setitem(runner.DETECTORS, "openfda", Truncated)
+    report = runner.run_detection(session, sources=["openfda"], backfill=True)
+
+    assert report.warnings
+    assert "only the first 50" in report.render()
+
+
 def test_a_scored_detection_moves_the_company_score(session, make_company, fake_source):
     company = make_company("Northwind Diagnostics")
     assert (company.current_score or 0) == 0

@@ -58,6 +58,8 @@ class RunReport:
     outcomes: list[Outcome] = field(default_factory=list)
     errors: list[SourceError] = field(default_factory=list)
     sources_run: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    backfill: bool = False
 
     def _by(self, status: str) -> list[Outcome]:
         return [o for o in self.outcomes if o.status == status]
@@ -85,6 +87,7 @@ class RunReport:
             "",
             f"Sources:   {', '.join(self.sources_run) or 'none'}",
             f"Since:     {self.since.isoformat()}"
+            + ("   (backfill)" if self.backfill else "")
             + ("   (discovery on)" if self.discover else ""),
             f"Companies: {self.companies_scanned} scanned, {self.queries_made} queries made",
             "",
@@ -109,6 +112,18 @@ class RunReport:
                 )
             if len(self.review) > 15:
                 lines.append(f"    ...and {len(self.review) - 15} more")
+
+        if self.warnings:
+            lines += ["", "Worth knowing:"]
+            for w in self.warnings[:10]:
+                lines.append(f"  - {w}")
+
+        if self.backfill and "news" in self.sources_run:
+            lines += [
+                "",
+                "Note: Google News RSS only carries recent items, so the backfill "
+                "reached back through openFDA and SBIR but not the press.",
+            ]
 
         if self.errors:
             lines += ["", "Sources that failed (the rest of the run continued):"]
@@ -173,19 +188,29 @@ def run_detection(
     since: dt.date | None = None,
     dry_run: bool = False,
     discover: bool | None = None,
+    backfill: bool = False,
     tenant_id: int | None = None,
 ) -> RunReport:
     cfg = get_config()
     detection_cfg = cfg.detection
     tenant_id = tenant_id if tenant_id is not None else cfg.tenant_id
 
-    since = since or _today() - dt.timedelta(
-        days=int(detection_cfg.get("default_lookback_days", 90))
-    )
+    if since is None:
+        if backfill:
+            # Months, not days: a capital cycle is 6 months to 2 years, and a
+            # signal from 20 months ago is decayed, not gone.
+            months = int(detection_cfg.get("backfill_months", 24))
+            since = _today() - dt.timedelta(days=round(months * 30.44))
+        else:
+            since = _today() - dt.timedelta(
+                days=int(detection_cfg.get("default_lookback_days", 90))
+            )
     if discover is None:
         discover = bool(detection_cfg.get("discovery", {}).get("enabled", False))
 
-    report = RunReport(dry_run=dry_run, since=since, discover=discover)
+    report = RunReport(
+        dry_run=dry_run, since=since, discover=discover, backfill=backfill
+    )
 
     companies = list(
         session.scalars(select(Company).where(Company.tenant_id == tenant_id))
@@ -218,6 +243,7 @@ def run_detection(
         for result in results:
             report.queries_made += result.queries_made
             report.errors.extend(result.errors)
+            report.warnings.extend(result.warnings)
 
             for detection in result.detections:
                 outcome = _process(

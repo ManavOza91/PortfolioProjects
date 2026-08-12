@@ -61,6 +61,9 @@ class DetectorResult:
     detections: list[Detection] = field(default_factory=list)
     errors: list[SourceError] = field(default_factory=list)
     queries_made: int = 0
+    # Things worth saying out loud that are not failures — most often "this source
+    # had more than we asked for", which on a long backfill means signals were lost.
+    warnings: list[str] = field(default_factory=list)
 
 
 class Detector(Protocol):
