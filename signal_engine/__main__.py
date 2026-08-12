@@ -154,8 +154,10 @@ def cmd_serve(args) -> int:
     print()
     print(f"  Signal Engine — {len(taxonomy.types)} signal types loaded ({seed_result.summary()})")
     print(f"  Open {url}")
-    if not cfg.llm_enabled:
-        print("  No ANTHROPIC_API_KEY — note parsing is off; notes are saved raw.")
+    # Parsing off is the normal state, so it is not worth a line. Only mention it
+    # when it IS on, since that is the one that costs money.
+    if cfg.llm_enabled:
+        print(f"  Note parsing is ON via {cfg.llm['parser_model']} (billed to your API key).")
     print("  Ctrl-C to stop.")
     print()
 
