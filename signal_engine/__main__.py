@@ -247,7 +247,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--source", action="append",
-        help="limit to one source (openfda, sbir, news). Repeatable. Default: all.",
+        help="limit to one source (openfda, eudamed, mhra, news). Repeatable. Default: all.",
     )
     p.add_argument("--since", help="only look at records dated on or after YYYY-MM-DD")
     p.add_argument(

@@ -24,15 +24,20 @@ from ..ingest import create_signal, find_or_create_company
 from ..models import Company, Signal, SignalType
 from ..scoring import rescore_company
 from .base import Detection, DetectorResult, SourceError, best_match
+from .eudamed import EUDAMEDDetector
+from .mhra import MHRADetector
 from .news import NewsDetector
 from .openfda import OpenFDADetector
-from .sbir import SBIRDetector
 
 log = logging.getLogger(__name__)
 
+# SBIR was removed: US-only, permanently returning TooManyRequestsError at source,
+# and grants are a qualifier rather than a trigger. Press coverage of a grant still
+# classifies as grant_award through the news keywords.
 DETECTORS = {
     "openfda": OpenFDADetector,
-    "sbir": SBIRDetector,
+    "eudamed": EUDAMEDDetector,
+    "mhra": MHRADetector,
     "news": NewsDetector,
 }
 
@@ -77,6 +82,10 @@ class RunReport:
         return self._by("skipped-duplicate")
 
     @property
+    def same_event(self) -> list[Outcome]:
+        return self._by("skipped-same-event")
+
+    @property
     def unmatched(self) -> list[Outcome]:
         return self._by("skipped-unmatched")
 
@@ -94,6 +103,7 @@ class RunReport:
             f"  {len(self.scored):>4}  scored automatically",
             f"  {len(self.review):>4}  waiting for you to review",
             f"  {len(self.duplicates):>4}  already known (skipped)",
+            f"  {len(self.same_event):>4}  same event, another outlet (collapsed)",
             f"  {len(self.unmatched):>4}  no company match (skipped)",
         ]
 
@@ -118,11 +128,12 @@ class RunReport:
             for w in self.warnings[:10]:
                 lines.append(f"  - {w}")
 
-        if self.backfill and "news" in self.sources_run:
+        if self.backfill:
             lines += [
                 "",
-                "Note: Google News RSS only carries recent items, so the backfill "
-                "reached back through openFDA and SBIR but not the press.",
+                "Note: the backfill reaches back through openFDA and MHRA, which "
+                "date their records. Google News RSS carries recent items only, and "
+                "EUDAMED publishes no registration date at all.",
             ]
 
         if self.errors:
@@ -154,12 +165,19 @@ def _known_type_keys(session: Session, tenant_id: int) -> set[str]:
     }
 
 
-def _already_seen(session: Session, detection: Detection, company_id: int) -> bool:
-    """Re-running detection must never duplicate a signal.
+def _already_seen(session: Session, detection: Detection, company_id: int) -> str | None:
+    """Why this detection should not become a new signal, or None to proceed.
 
-    Keyed on the source URL where there is one — a K-number page or an article link
-    is unique per record. Falls back to type + company + date, which catches sources
-    that give us no stable link.
+    Two different reasons, and the report keeps them apart:
+
+    "duplicate" — we have this exact record already, because detection has been
+    run before. Keyed on the source URL, falling back to type + company + date.
+
+    "same-event" — a different record describing an event we already have. Three
+    outlets reporting one alliance are three URLs and one event; scoring all three
+    lets a single announcement compound itself into Tier A. Only sources without
+    per-event record IDs are collapsed this way (see Detection.unique_per_event),
+    so two genuine clearances in the same week both survive.
     """
     if detection.url:
         hit = session.scalar(
@@ -168,7 +186,7 @@ def _already_seen(session: Session, detection: Detection, company_id: int) -> bo
             )
         )
         if hit:
-            return True
+            return "duplicate"
 
     hit = session.scalar(
         select(Signal.id).where(
@@ -178,7 +196,28 @@ def _already_seen(session: Session, detection: Detection, company_id: int) -> bo
             Signal.source == "auto",
         )
     )
-    return bool(hit)
+    if hit:
+        return "duplicate"
+
+    if not detection.unique_per_event:
+        window = int(
+            get_config().detection.get("duplicate_event_window_days", 14)
+        )
+        hit = session.scalar(
+            select(Signal.id).where(
+                Signal.company_id == company_id,
+                Signal.type_key == detection.type_key,
+                Signal.source == "auto",
+                Signal.detected_date
+                >= detection.detected_date - dt.timedelta(days=window),
+                Signal.detected_date
+                <= detection.detected_date + dt.timedelta(days=window),
+            )
+        )
+        if hit:
+            return "same-event"
+
+    return None
 
 
 def run_detection(
@@ -316,9 +355,10 @@ def _process(
     )
     new_company = new_company or created
 
-    if _already_seen(session, detection, company.id):
+    seen = _already_seen(session, detection, company.id)
+    if seen:
         return Outcome(detection, company.name, match_kind, confidence,
-                       "skipped-duplicate", new_company=False)
+                       f"skipped-{seen}", new_company=False)
 
     threshold = cfg.auto_review_threshold
     status = "scored" if confidence >= threshold else "review"

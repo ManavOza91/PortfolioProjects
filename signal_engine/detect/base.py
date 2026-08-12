@@ -45,6 +45,15 @@ class Detection:
     # Company matching is applied on top of this by the runner.
     source_confidence: float = 0.9
 
+    # True when the source issues one record per real-world event — a K-number is
+    # one clearance, a EUDAMED UUID is one device. Two such records in the same
+    # week are two events and must both stand.
+    #
+    # False when the source reports events rather than issuing them. Three outlets
+    # covering one alliance are three URLs and one event; the runner collapses
+    # them so a single announcement cannot compound itself into Tier A.
+    unique_per_event: bool = True
+
     def summary(self) -> str:
         return self.title.strip()
 
@@ -96,19 +105,32 @@ def fetch(
     url: str,
     *,
     params: dict[str, Any] | None = None,
+    json_body: dict[str, Any] | None = None,
     as_json: bool = True,
+    timeout: float | None = None,
 ) -> tuple[Any | None, SourceError | None]:
-    """One polite HTTP GET. Returns (payload, error) — never raises."""
+    """One polite HTTP request. Returns (payload, error) — never raises.
+
+    GET unless `json_body` is given, in which case POST: MHRA's public search is
+    a POST endpoint behind its search page.
+    """
     cfg = get_config().detection
     _throttle(source)
 
     headers = {"User-Agent": str(cfg.get("user_agent", "SignalEngine/0.1"))}
-    timeout = float(cfg.get("timeout_seconds", 30))
+    timeout = timeout if timeout is not None else float(cfg.get("timeout_seconds", 30))
 
     try:
-        response = httpx.get(
-            url, params=params, headers=headers, timeout=timeout, follow_redirects=True
-        )
+        if json_body is not None:
+            response = httpx.post(
+                url, params=params, json=json_body, headers=headers,
+                timeout=timeout, follow_redirects=True,
+            )
+        else:
+            response = httpx.get(
+                url, params=params, headers=headers, timeout=timeout,
+                follow_redirects=True,
+            )
     except Exception as exc:  # noqa: BLE001 — a dead source must not kill the run
         return None, SourceError(source, f"could not reach {url}: {type(exc).__name__}")
 

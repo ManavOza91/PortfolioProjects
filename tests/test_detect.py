@@ -10,7 +10,7 @@ import datetime as dt
 
 import pytest
 
-from signal_engine.detect import base, news, openfda, runner, sbir
+from signal_engine.detect import base, eudamed, mhra, news, openfda, runner
 from signal_engine.detect.base import Detection, classify_by_keyword, match_company_name
 
 TODAY = dt.date(2026, 8, 12)
@@ -97,13 +97,6 @@ def test_openfda_row_becomes_a_detection_with_a_link_back():
     assert "K253634" in detection.title
 
 
-def test_sbir_accepts_both_payload_shapes():
-    row = {"firm": "Acme Bio", "award_title": "Lyophilised reagent study"}
-    assert sbir._rows([row]) == [row]
-    assert sbir._rows({"data": [row]}) == [row]
-    assert sbir._rows({"unexpected": 1}) == []
-
-
 def test_a_news_item_only_counts_when_the_company_is_named_and_a_keyword_hits():
     detector = news.NewsDetector()
     stamp = "Tue, 11 Aug 2026 09:00:00 GMT"
@@ -125,6 +118,117 @@ def test_a_news_item_only_counts_when_the_company_is_named_and_a_keyword_hits():
         {"title": "Acme Corp opens new fill-finish line", "pubDate": stamp},
         "Northwind Bio", SINCE, 0.55,
     ) is None
+
+
+EUDAMED_PAYLOAD = {
+    "totalElements": 36,
+    "content": [
+        {
+            "manufacturerName": "Miltenyi Biotec B.V. & Co. KG",
+            "manufacturerSrn": "DE-MF-000000123",
+            "tradeName": "CliniMACS PBS/EDTA Buffer",
+            "riskClass": {"code": "refdata.risk-class.class-iib"},
+            "deviceStatusType": {"code": "refdata.device-model-status.on-the-market"},
+        },
+        {
+            "manufacturerName": "Miltenyi Biotec B.V. & Co. KG",
+            "tradeName": "CryoMACS Freezing Bag 250",
+            "riskClass": {"code": "refdata.risk-class.class-iia"},
+            "deviceStatusType": {"code": "refdata.device-model-status.on-the-market"},
+        },
+    ],
+}
+
+
+def test_eudamed_collapses_a_whole_catalogue_into_one_signal():
+    """36 registered devices is one piece of evidence, not 36."""
+    detection = eudamed.EUDAMEDDetector()._aggregate(
+        EUDAMED_PAYLOAD, "Miltenyi", "regulatory_submission", 0.65, 50
+    )
+    assert detection is not None
+    assert detection.raw["highest_risk_class"] == "class-iib"
+    assert detection.company_name == "Miltenyi Biotec B.V. & Co. KG"
+    assert detection.raw["devices_confirmed"] == 2
+
+
+def test_eudamed_never_reports_a_count_it_did_not_verify():
+    """"Antech" contains-matched 3063 rows; only the confirmed ones may be counted."""
+    payload = {
+        "totalElements": 3063,
+        "content": [
+            {"manufacturerName": "Antech Diagnostics", "tradeName": "A"},
+            {"manufacturerName": "Plantech Medical GmbH", "tradeName": "B"},
+        ],
+    }
+    detection = eudamed.EUDAMEDDetector()._aggregate(
+        payload, "Antech", "regulatory_submission", 0.65, 50
+    )
+    assert "3063" not in detection.title
+    assert detection.raw["devices_confirmed"] == 1
+    assert detection.raw["count_is_a_floor"] is True
+    assert "at least" in detection.title
+
+
+def test_eudamed_marks_a_count_as_a_floor_when_it_only_read_one_page():
+    """EUDAMED caps its page at 20 whatever pageSize we ask for."""
+    detection = eudamed.EUDAMEDDetector()._aggregate(
+        EUDAMED_PAYLOAD, "Miltenyi", "regulatory_submission", 0.65, 50
+    )
+    # 36 registered, 2 rows on the page — the count must not read as complete.
+    assert detection.raw["count_is_a_floor"] is True
+    assert "at least 2 device registrations" in detection.title
+
+
+def test_eudamed_never_clears_the_auto_bar():
+    """It publishes no date, so it is a standing fact and always goes to review."""
+    from signal_engine.config import get_config
+
+    cfg = get_config().detection["sources"]["eudamed"]
+    assert float(cfg["base_confidence"]) < get_config().auto_review_threshold
+
+
+def test_eudamed_rejects_a_contains_match_on_the_wrong_manufacturer():
+    """The `name` filter matches across the record, so the name is re-checked."""
+    payload = {
+        "totalElements": 1,
+        "content": [{"manufacturerName": "Someone Else Ltd", "tradeName": "Widget"}],
+    }
+    assert eudamed.EUDAMEDDetector()._aggregate(
+        payload, "Miltenyi", "regulatory_submission", 0.65, 50
+    ) is None
+
+
+MHRA_ROW = {
+    "MAN_ORGANISATION_ID": 34990,
+    "MAN_CREATED_DATE": "2021-05-04T00:00:00.000Z",
+    "MAN_ORGANISATION_NAME": "Miltenyi Biotec B.V. & Co. KG",
+    "MAN_COUNTRY": "Germany",
+    "RELATIONSHIP": "UK Responsible Person",
+    "REP_NAME": "Miltenyi Biotec Ltd.",
+}
+
+
+def test_mhra_row_keeps_its_registration_date():
+    """The one EU/UK source that dates its records — --since depends on it."""
+    detection = mhra.MHRADetector()._to_detection(MHRA_ROW, "regulatory_submission", 0.9)
+    assert detection is not None
+    assert detection.detected_date == dt.date(2021, 5, 4)
+    assert detection.company_name == "Miltenyi Biotec B.V. & Co. KG"
+    assert detection.url.endswith("34990")
+    assert "Germany" in detection.title
+
+
+def test_mhra_sees_a_non_uk_manufacturer_selling_into_the_uk():
+    """The whole point: a German company with no US filing is still visible."""
+    detection = mhra.MHRADetector()._to_detection(MHRA_ROW, "regulatory_submission", 0.9)
+    assert detection.raw["country"] == "Germany"
+    assert detection.raw["uk_responsible_person"] == "Miltenyi Biotec Ltd."
+
+
+def test_sbir_is_gone():
+    """US-only, permanently down at source, and grants are a qualifier."""
+    assert "sbir" not in runner.DETECTORS
+    assert set(runner.DETECTORS) == {"openfda", "eudamed", "mhra", "news"}
 
 
 def test_news_discovery_is_deliberately_empty():
@@ -268,6 +372,70 @@ def test_running_twice_does_not_duplicate_a_signal(session, make_company, fake_s
     assert len(second.duplicates) == 1
 
 
+def test_one_event_reported_by_three_outlets_becomes_one_signal(
+    session, make_company, fake_source
+):
+    """The Meiban case: one CDMO alliance, three outlets, was reaching Tier A."""
+    make_company("Meiban")
+    fake_source(watchlist=[
+        Detection(
+            type_key="new_lyo_capacity", company_name="Meiban",
+            title=f"Outlet {n} reports the Planet Innovation alliance",
+            detected_date=dt.date(2026, 7, 1) + dt.timedelta(days=n),
+            url=f"https://outlet{n}.test/story", source_name="Google News",
+            source_confidence=0.55, unique_per_event=False,
+        )
+        for n in range(3)
+    ])
+
+    report = runner.run_detection(session, sources=["openfda"], since=SINCE)
+
+    assert len(report.review) == 1, "three outlets, one event, one signal"
+    assert len(report.same_event) == 2
+    assert "same event" in report.render()
+
+
+def test_two_real_clearances_in_one_week_both_survive(
+    session, make_company, fake_source
+):
+    """The collapse must not swallow genuine events. openFDA issues K-numbers."""
+    make_company("Northwind Diagnostics")
+    fake_source(watchlist=[
+        _detection(
+            "Northwind Diagnostics",
+            detected_date=dt.date(2026, 6, 1) + dt.timedelta(days=n),
+            url=f"https://example.test/K{n}",
+        )
+        for n in range(2)
+    ])
+
+    report = runner.run_detection(session, sources=["openfda"], since=SINCE)
+
+    assert len(report.scored) == 2
+    assert not report.same_event
+
+
+def test_the_collapse_respects_the_configured_window(
+    session, make_company, fake_source
+):
+    """Two months apart is two events, even from the press."""
+    make_company("Meiban")
+    fake_source(watchlist=[
+        Detection(
+            type_key="new_lyo_capacity", company_name="Meiban", title=f"story {n}",
+            detected_date=dt.date(2026, 3, 1) + dt.timedelta(days=60 * n),
+            url=f"https://outlet{n}.test/x", source_name="Google News",
+            source_confidence=0.55, unique_per_event=False,
+        )
+        for n in range(2)
+    ])
+
+    report = runner.run_detection(session, sources=["openfda"], since=SINCE)
+
+    assert len(report.review) == 2
+    assert not report.same_event
+
+
 def test_dry_run_writes_nothing(session, make_company, fake_source):
     make_company("Northwind Diagnostics")
     fake_source(watchlist=[_detection("Northwind Diagnostics")])
@@ -300,9 +468,9 @@ def test_a_dead_source_is_reported_and_the_run_continues(
         watchlist = [_detection("Northwind Diagnostics")]
 
     monkeypatch.setitem(runner.DETECTORS, "openfda", DeadSource)
-    monkeypatch.setitem(runner.DETECTORS, "sbir", LiveSource)
+    monkeypatch.setitem(runner.DETECTORS, "news", LiveSource)
 
-    report = runner.run_detection(session, sources=["openfda", "sbir"], since=SINCE)
+    report = runner.run_detection(session, sources=["openfda", "news"], since=SINCE)
 
     assert [e.message for e in report.errors] == ["rate-limited"]
     assert len(report.scored) == 1

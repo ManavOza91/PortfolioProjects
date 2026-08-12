@@ -38,7 +38,7 @@ SQLite via SQLAlchemy 2.0 + Alembic, Anthropic SDK with `messages.parse()`.
 | `scripts/` | `parser_check.py`, `export_portable.py` |
 
 Commands: `./run.sh` (or `.\run.ps1` on Windows) — also `demo`, `seed`, `rescore`,
-`import [--dry-run]`, `detect [--dry-run|--source|--since|--discover]`, `parser-check`,
+`import [--dry-run]`, `detect [--dry-run|--source|--since|--backfill|--discover]`, `parser-check`,
 `export-portable`, `purge-contacts`, `test`.
 
 ## Built vs not
@@ -58,9 +58,11 @@ When a key IS present, `llm_ready` turns on and the free-text note box reappears
 itself in `add.html` and `company.html`. Don't reintroduce a "no API key" warning.
 
 **Never verified:** a live parser call. No key has been available in any session.
-Request shape is covered by stubbed tests only. Same for the **SBIR** detector — that
-API returns `TooManyRequestsError` at source on every request, so its response shape
-follows sbir.gov's docs but has never been seen. openFDA and Google News are verified live.
+Request shape is covered by stubbed tests only. All four detection sources — openFDA,
+EUDAMED, MHRA PARD, Google News — are verified live. **MHRA PARD is an undocumented
+POST endpoint** behind its public search page (`/searchManufacturers`), so it may
+change shape without notice; failure is reported and the run continues.
+SBIR was **removed** (US-only, permanently `TooManyRequestsError` at source).
 
 ## Load-bearing decisions — do not "tidy" these
 
@@ -89,6 +91,13 @@ follows sbir.gov's docs but has never been seen. openFDA and Google News are ver
    does matching, confidence and the review gate for every source identically. A partial
    name match is pinned below `auto_review_threshold` on purpose, and a discovered
    company can never auto-score — both are what stop detection manufacturing pipeline.
+10. **`Detection.unique_per_event`.** False for the press: three outlets covering one
+    announcement collapse to one signal (company + type + 14 days), or a single event
+    compounds itself into Tier A. True for sources that issue a record per event
+    (K-number, EUDAMED UUID) so two clearances in one week both survive.
+11. **EUDAMED publishes no registration date.** It is aggregated to ONE signal per
+    company (not one per device) and pinned below the auto bar — it is a standing
+    fact, not a dated event. Don't "fix" it by dating it today and letting it score.
 
 ## portable/
 

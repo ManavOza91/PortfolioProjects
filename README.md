@@ -243,11 +243,27 @@ stays a manual entry, which is where it came from.
 
 Three free sources, no API key and no registration for any of them:
 
-| Source | What it looks for | Weight it carries |
-|---|---|---|
-| **openFDA 510(k)** | Clearances naming one of your companies as applicant | Strong — a matter of public record |
-| **SBIR / STTR awards** | Grant awards to your companies | A qualifier, not a trigger |
-| **Google News RSS** | Headlines naming your company **and** a taxonomy keyword | Weak — always goes to review |
+| Source | Covers | What it looks for | Weight it carries |
+|---|---|---|---|
+| **openFDA 510(k)** | US | Clearances naming your company as applicant | Strong — public record, dated |
+| **EUDAMED** | EU | Devices registered on the EU market (MDR + IVDR) | Standing fact — always goes to review |
+| **MHRA PARD** | UK | Registration to place devices on the UK market | Strong — public record, dated |
+| **Google News RSS** | Global | Headlines naming your company **and** a taxonomy keyword | Weak — always goes to review |
+
+Most of this market is not American, so openFDA alone sees very little of it.
+EUDAMED and MHRA are what make a German or Singaporean manufacturer visible —
+MHRA in particular catches non-UK companies selling into Britain through a UK
+Responsible Person.
+
+Two limitations worth knowing, both of them the sources' rather than choices:
+
+- **EUDAMED publishes no registration date.** There is no "what's new since March"
+  query to make. So it reports a standing fact — *"this company has 36 devices on
+  the EU market, highest risk class IIb"* — as **one** signal per company rather
+  than one per device, pinned below the auto bar so it always reaches you.
+- **There is no grants source.** SBIR was removed: US-only, permanently returning
+  `TooManyRequestsError` at source, and a grant is a qualifier rather than a
+  trigger. Press coverage of a grant still classifies as `grant_award`.
 
 It is **watchlist-first**: it checks companies you already track. It does not go
 hunting for new ones unless you pass `--discover`, and anything it discovers
@@ -271,11 +287,16 @@ from. Two things decide where it lands:
 
 The lower of the two is the confidence. At or above `scoring.auto_review_threshold`
 (0.70) it scores; below it, it waits on the **Review** page for you to approve or
-reject. Re-running never duplicates anything — a find is keyed on its source URL.
+reject.
+
+**One event is one signal.** Re-running never duplicates a find, and three outlets
+reporting the same announcement collapse into a single signal rather than
+compounding into a tier they didn't earn. Sources that issue a record per event —
+a K-number, a EUDAMED UUID — are exempt, so two genuine clearances in the same
+week both stand. The window is `detection.duplicate_event_window_days` (14).
 
 A source being down is a normal outcome, not a failure: it is reported and the
-rest of the run continues. The SBIR API in particular is frequently unavailable
-at source, independent of anything here.
+rest of the run continues.
 
 Keywords live in `config.yaml` under `detection.keywords` — plain data, edit them
 as you learn how your market phrases things.

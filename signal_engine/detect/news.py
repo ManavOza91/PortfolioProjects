@@ -100,6 +100,9 @@ class NewsDetector:
             raw={"headline": title, "matched_keyword": keyword,
                  "published": item.get("pubDate"), "outlet": item.get("source")},
             source_confidence=base_conf,
+            # The press reports events, it does not issue them. One alliance
+            # covered by three outlets must not become three signals.
+            unique_per_event=False,
         )
 
 

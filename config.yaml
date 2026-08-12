@@ -168,8 +168,9 @@ detection:
   # BACKFILL (`detect --backfill`) — the first-run sweep. Capital cycles run 6
   # months to 2 years, so a signal from 20 months ago is still live: it decays to
   # the floor, it does not disappear. 24 months is the whole cycle.
-  # Note: only openFDA and SBIR hold history. Google News RSS returns recent items
-  # only, so a backfill deepens the regulatory sources, not the press.
+  # Note: only openFDA and MHRA hold dated history. Google News RSS returns recent
+  # items only and EUDAMED publishes no dates, so a backfill deepens the dated
+  # regulatory sources, not the press.
   backfill_months: 24
 
   # DISCOVERY finds companies not already in your database. Off by default: it is
@@ -178,6 +179,12 @@ detection:
   discovery:
     enabled: false
     max_new_companies_per_run: 25
+
+  # One event, reported by three outlets, is one signal. Sources that issue a
+  # unique record ID per event (a K-number, a EUDAMED UUID) are exempt — two
+  # clearances in the same week are genuinely two events. Sources without one
+  # (the press) collapse to a single signal per company, per type, per window.
+  duplicate_event_window_days: 14
 
   # Company-name matching. Detected records name a company in free text; we have
   # to decide whether that is one of yours.
@@ -202,14 +209,30 @@ detection:
       # Discovery mode only: device-name keywords worth surfacing.
       discovery_keywords: ["lyophilized", "lyophilised", "freeze-dried", "reagent bead"]
 
-    sbir:
+    # EU device registrations. Free, no key. Covers MDR and IVDR devices, which is
+    # where most of this market actually files — openFDA cannot see any of them.
+    # NOTE: EUDAMED publishes no registration date on these records, so this is a
+    # STANDING FACT ("they have N devices on the EU market"), not a dated event.
+    # It is therefore pinned below the auto bar and always reaches you for review,
+    # and it collapses to one signal per company rather than one per device.
+    eudamed:
       enabled: true
-      url: "https://api.www.sbir.gov/public/api/awards"
-      type_key: grant_award
-      max_results_per_company: 20
-      # NOTE: this API is frequently down or rate-limited at source. A failure here
-      # is reported and skipped; it never aborts the run or the other sources.
-      discovery_keywords: ["lyophilization", "freeze drying", "reagent stability", "assay development"]
+      url: "https://ec.europa.eu/tools/eudamed/api/devices/udiDiData"
+      type_key: regulatory_submission
+      max_results_per_company: 50
+      base_confidence: 0.65
+      # EUDAMED pages a 3-million-row table; 30s times out more often than not.
+      timeout_seconds: 90
+
+    # UK device registrations (MHRA Public Access Registration Database). Free,
+    # no key. POST endpoint behind the public search page. Unlike EUDAMED these
+    # records carry a registration date, so they behave as dated events.
+    mhra:
+      enabled: true
+      url: "https://pard.mhra.gov.uk/searchManufacturers"
+      type_key: regulatory_submission
+      max_results_per_company: 25
+      base_confidence: 0.90
 
     news:
       enabled: true
@@ -243,6 +266,8 @@ detection:
       # not money, and funding is a qualifier rather than a trigger.
       ["series a", "series b", "series c", "raises", "funding round"]
     grant_award:
+      # No grants source is fetched any more (SBIR was US-only and permanently
+      # down); these still classify press coverage of a grant.
       ["sbir", "sttr", "innovate uk", "horizon europe", "grant award", "awarded a grant"]
     iso13485_facility_expansion:
       ["iso 13485", "cleanroom", "clean room", "facility expansion", "new facility"]
