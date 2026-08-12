@@ -148,6 +148,94 @@ llm:
   fail_soft: true
 
 # ---------------------------------------------------------------------------
+# Automated signal detection (phase 10)
+# ---------------------------------------------------------------------------
+# Public sources only. No API key, no licensed data, no enrichment vendor.
+# Run it with:  ./run.sh detect          (or .\run.ps1 detect on Windows)
+#
+# Everything found is written with source=auto and a link back to where it came
+# from. Anything below scoring.auto_review_threshold lands in the review queue
+# instead of scoring — you approve or reject it.
+detection:
+  # Be polite to free public APIs. Seconds between requests, per source.
+  request_delay_seconds: 0.5
+  timeout_seconds: 30
+  user_agent: "SignalEngine/0.1 (capital instrument sales signal monitor)"
+
+  # How far back to look when you don't pass --since.
+  default_lookback_days: 90
+
+  # DISCOVERY finds companies not already in your database. Off by default: it is
+  # far noisier, and everything it finds is a company you have never assessed.
+  # Turn on here, or per-run with --discover.
+  discovery:
+    enabled: false
+    max_new_companies_per_run: 25
+
+  # Company-name matching. Detected records name a company in free text; we have
+  # to decide whether that is one of yours.
+  matching:
+    # Exact match after normalising case and legal suffixes (Ltd, Inc, GmbH...).
+    exact_confidence: 0.92
+    # One name contains the other, e.g. "Northwind" vs "Northwind Diagnostics".
+    # Deliberately below auto_review_threshold, so these always go to review.
+    partial_confidence: 0.60
+    min_name_length: 5   # don't match on short/generic names
+
+  sources:
+    openfda:
+      enabled: true
+      # 510(k) clearances and De Novo authorisations.
+      endpoints:
+        - {name: "510(k)", url: "https://api.fda.gov/device/510k.json", type_key: regulatory_submission}
+        - {name: "De Novo", url: "https://api.fda.gov/device/registrationlisting.json", type_key: regulatory_submission}
+      max_results_per_company: 20
+      # Discovery mode only: device-name keywords worth surfacing.
+      discovery_keywords: ["lyophilized", "lyophilised", "freeze-dried", "reagent bead"]
+
+    sbir:
+      enabled: true
+      url: "https://api.www.sbir.gov/public/api/awards"
+      type_key: grant_award
+      max_results_per_company: 20
+      # NOTE: this API is frequently down or rate-limited at source. A failure here
+      # is reported and skipped; it never aborts the run or the other sources.
+      discovery_keywords: ["lyophilization", "freeze drying", "reagent stability", "assay development"]
+
+    news:
+      enabled: true
+      # Google News RSS. Public feed, no key, no scraping of the articles themselves.
+      url: "https://news.google.com/rss/search"
+      language: "en-US"
+      country: "US"
+      max_items_per_company: 10
+      # Headlines are weak evidence, so news never clears the auto bar on its own.
+      base_confidence: 0.55
+
+  # Keyword -> signal type. A headline must contain one of these to become a
+  # signal of that type. Editable data: add your own phrasing as you learn it.
+  keywords:
+    new_lyo_capacity:
+      ["fill-finish", "fill finish", "lyophilization capacity", "lyophilisation capacity",
+       "freeze dryer", "freeze-dryer", "sterile injectable", "aseptic facility"]
+    regulatory_submission:
+      ["510(k)", "de novo", "fda clearance", "fda clearing", "ce-ivdr", "ivdr", "eua"]
+    assay_kit_panel_launch:
+      ["launches assay", "new assay", "test kit", "multiplex panel", "diagnostic panel"]
+    funding_scale_up:
+      ["series a", "series b", "series c", "raises", "funding round", "scale up manufacturing"]
+    grant_award:
+      ["sbir", "sttr", "innovate uk", "horizon europe", "grant award", "awarded a grant"]
+    iso13485_facility_expansion:
+      ["iso 13485", "cleanroom", "clean room", "facility expansion", "new facility"]
+    phase_1_parenteral:
+      ["phase 1 trial", "phase i trial", "first-in-human", "investigational new drug"]
+    publication_stability_lyo:
+      ["reagent stability", "ambient stable", "cold chain free", "lyophilization study"]
+    conference_presentation:
+      ["to present at", "exhibiting at", "poster at", "keynote at"]
+
+# ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
 server:

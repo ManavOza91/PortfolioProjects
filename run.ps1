@@ -3,6 +3,8 @@
 #   .\run.ps1                  migrate, seed, rescore, open the app
 #   .\run.ps1 parser-check     run the parser acceptance test
 #   .\run.ps1 demo             load a worked example
+#   .\run.ps1 detect           check public sources for new signals
+#   .\run.ps1 detect --dry-run see what it would find, write nothing
 #   .\run.ps1 test             run the test suite
 #   .\run.ps1 import -dry-run  preview a CSV import
 #   .\run.ps1 export-portable  regenerate portable/

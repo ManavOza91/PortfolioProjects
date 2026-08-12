@@ -104,6 +104,10 @@ class Config:
         return bool(self.llm.get("enabled", True)) and bool(os.environ.get("ANTHROPIC_API_KEY"))
 
     @property
+    def detection(self) -> dict[str, Any]:
+        return self.raw.get("detection", {})
+
+    @property
     def server(self) -> dict[str, Any]:
         return self.raw.get("server", {})
 

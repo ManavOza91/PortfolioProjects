@@ -112,6 +112,51 @@ def cmd_purge_contacts(args) -> int:
     return 0
 
 
+def cmd_detect(args) -> int:
+    import datetime as dt
+
+    from .db import session_scope
+    from .detect import DETECTORS, run_detection
+
+    _ensure_ready()
+
+    sources = args.source or None
+    if sources:
+        unknown = [s for s in sources if s not in DETECTORS]
+        if unknown:
+            print(
+                f"Unknown source(s): {', '.join(unknown)}. "
+                f"Available: {', '.join(DETECTORS)}."
+            )
+            return 1
+
+    since = None
+    if args.since:
+        try:
+            since = dt.date.fromisoformat(args.since)
+        except ValueError:
+            print(f"--since must look like 2026-01-31, not {args.since!r}.")
+            return 1
+
+    discover = True if args.discover else None
+
+    with session_scope() as session:
+        report = run_detection(
+            session,
+            sources=sources,
+            since=since,
+            dry_run=args.dry_run,
+            discover=discover,
+        )
+        print()
+        print(report.render())
+        print()
+        if args.dry_run:
+            # run_detection already rolled back; make sure nothing sneaks through.
+            session.rollback()
+    return 0
+
+
 def cmd_demo(_args) -> int:
     from .demo import load_demo
 
@@ -190,6 +235,22 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("import", help="import companies and contacts from data/import/*.csv")
     p.add_argument("--dry-run", action="store_true", help="preview only, write nothing")
     p.set_defaults(func=cmd_import)
+
+    p = sub.add_parser(
+        "detect",
+        help="check free public sources for new signals on your companies",
+    )
+    p.add_argument(
+        "--source", action="append",
+        help="limit to one source (openfda, sbir, news). Repeatable. Default: all.",
+    )
+    p.add_argument("--since", help="only look at records dated on or after YYYY-MM-DD")
+    p.add_argument("--dry-run", action="store_true", help="show what would be found, write nothing")
+    p.add_argument(
+        "--discover", action="store_true",
+        help="also look for companies you don't track yet (they arrive for review)",
+    )
+    p.set_defaults(func=cmd_detect)
 
     p = sub.add_parser("purge-contacts", help="delete ALL personal data, keeping scoring intact")
     p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")

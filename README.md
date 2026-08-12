@@ -59,6 +59,8 @@ echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 | `./run.sh import --dry-run` | Preview a CSV import without writing anything |
 | `./run.sh import` | Run the CSV import |
 | `./run.sh demo` | Load a small worked example so you can see the shape of it |
+| `./run.sh detect --dry-run` | Check public sources for new signals, writing nothing |
+| `./run.sh detect` | Check public sources and file what it finds (see below) |
 | `./run.sh purge-contacts` | Delete **all** personal data, keeping scoring intact |
 | `./run.sh parser-check` | Run the parser against known notes and grade the output |
 | `./run.sh export-portable` | Regenerate `portable/` (see below) |
@@ -228,10 +230,55 @@ on domain first, then on a normalised company name.
 | 7 | Interactive dashboard | ✅ |
 | 8 | Manager insight layer with expiry and outcome scoring | schema only |
 | 9 | Coach: prioritise, draft, critique, notice | not started |
-| 10 | Automated signal detection (openFDA, grants, news, jobs) | not started |
+| 10 | Automated signal detection (openFDA, grants, news) | ✅ |
 
-Phases 8–10 have their schema and config in place. Phase 9's model setting
-(`llm.coach_model`) is already read from config.
+Phases 8 and 9 have their schema and config in place. Phase 9's model setting
+(`llm.coach_model`) is already read from config. Job-posting detection is not
+built — there is no free public jobs API worth trusting, so that signal type
+stays a manual entry, which is where it came from.
+
+---
+
+## Checking public sources — `./run.sh detect`
+
+Three free sources, no API key and no registration for any of them:
+
+| Source | What it looks for | Weight it carries |
+|---|---|---|
+| **openFDA 510(k)** | Clearances naming one of your companies as applicant | Strong — a matter of public record |
+| **SBIR / STTR awards** | Grant awards to your companies | A qualifier, not a trigger |
+| **Google News RSS** | Headlines naming your company **and** a taxonomy keyword | Weak — always goes to review |
+
+It is **watchlist-first**: it checks companies you already track. It does not go
+hunting for new ones unless you pass `--discover`, and anything it discovers
+arrives as a watchlist entry with a signal waiting for review — never scored.
+
+```bash
+./run.sh detect --dry-run          # see what it would find, write nothing
+./run.sh detect                    # file what it finds
+./run.sh detect --source openfda   # one source only (repeatable)
+./run.sh detect --since 2026-01-01 # default is the last 90 days
+./run.sh detect --discover         # also look for companies you don't track
+```
+
+Everything found is marked `source = auto` with a link back to where it came
+from. Two things decide where it lands:
+
+1. **How sure the source is** the record is real (a 510(k) is certain; a headline is not).
+2. **How sure we are it's your company.** An exact name match after stripping
+   legal suffixes is trusted. A partial match — "Northwind" inside "Northwind
+   Diagnostics Group" — deliberately scores *below* the auto bar.
+
+The lower of the two is the confidence. At or above `scoring.auto_review_threshold`
+(0.70) it scores; below it, it waits on the **Review** page for you to approve or
+reject. Re-running never duplicates anything — a find is keyed on its source URL.
+
+A source being down is a normal outcome, not a failure: it is reported and the
+rest of the run continues. The SBIR API in particular is frequently unavailable
+at source, independent of anything here.
+
+Keywords live in `config.yaml` under `detection.keywords` — plain data, edit them
+as you learn how your market phrases things.
 
 ---
 
@@ -261,6 +308,7 @@ signal_engine/
   importer.py            CSV import with mapping and dry-run
   seed.py                taxonomy -> database
   llm/parser.py          natural-language signal parser
+  detect/                automatic detection: one module per public source
   web/                   FastAPI app, templates, dashboard
 alembic/                 database migrations
 tests/                   scoring, Buddy Score, and data-separation tests

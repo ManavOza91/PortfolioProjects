@@ -6,6 +6,8 @@
 #   ./run.sh seed             reload data/taxonomy.yaml
 #   ./run.sh rescore          recompute all scores
 #   ./run.sh demo             load a worked example
+#   ./run.sh detect           check public sources for new signals
+#   ./run.sh detect --dry-run see what it would find, write nothing
 #   ./run.sh test             run the tests
 #   ./run.sh purge-contacts   delete all personal data
 #
