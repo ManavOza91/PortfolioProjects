@@ -54,9 +54,14 @@ def stub(monkeypatch):
     """Install a fake Anthropic client and pretend a key is present."""
 
     def _install(response):
+        from signal_engine.config import get_config
+
         fake = FakeClient(response)
         monkeypatch.setattr(client_module, "get_client", lambda: fake)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        # Parsing is opt-in and off by default in config.yaml — these tests are
+        # exercising the path as it behaves when a user has turned it on.
+        monkeypatch.setitem(get_config().llm, "enabled", True)
         return fake
 
     return _install
@@ -225,11 +230,26 @@ def test_a_refusal_fails_soft(stub):
 
 
 def test_a_missing_key_fails_soft_with_a_useful_message(monkeypatch):
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().llm, "enabled", True)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     outcome = parse_entry("A note")
     assert outcome.ok is False
     assert "ANTHROPIC_API_KEY" in outcome.error
     assert "saved" in outcome.error.lower()
+
+
+def test_parsing_is_off_by_default_even_with_a_key_present(monkeypatch):
+    """A leftover key must not silently re-enable a paid code path.
+
+    This is the exact failure it prevents: an expired or out-of-credit key sitting
+    in .env used to bring the note box back and start making billed calls.
+    """
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-leftover-key")
+    outcome = parse_entry("A note")
+    assert outcome.ok is False
+    assert "disabled" in outcome.error
 
 
 def test_fail_soft_can_be_turned_off(stub, monkeypatch):

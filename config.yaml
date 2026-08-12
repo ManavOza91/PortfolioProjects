@@ -122,7 +122,14 @@ buddy_score:
 # ---------------------------------------------------------------------------
 # Requires ANTHROPIC_API_KEY in the environment (or a .env file next to this one).
 llm:
-  enabled: true
+  # OFF by default, and deliberately not keyed on "is there an API key lying around".
+  # A leftover key — expired, out of credits, belonging to another project — must
+  # never silently re-enable a paid code path. Turn parsing on explicitly:
+  #   1. uv pip install -e ".[llm]"
+  #   2. put ANTHROPIC_API_KEY=... in .env
+  #   3. set this to true
+  # The app is fully functional with this false; signals are entered on a form.
+  enabled: false
 
   # Parsing a note into a structured signal is cheap extraction work.
   parser_model: "claude-sonnet-4-6"
