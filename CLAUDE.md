@@ -6,6 +6,9 @@ because a buying signal fired, not because it's on a target list.** Target lists
 watchlists, never fetch queues. Output is a ranked company queue with a stated reason;
 finding the right person is a manual step the user does themselves.
 
+**Heading for multi-tenant SaaS** sold to other life science instrument companies —
+see load-bearing decision 12 before adding anything.
+
 ## Working rules (user is on a Pro plan with a 5-hour limit — respect these)
 
 - Don't re-read files already read this session unless the user changed them.
@@ -98,6 +101,33 @@ SBIR was **removed** (US-only, permanently `TooManyRequestsError` at source).
 11. **EUDAMED publishes no registration date.** It is aggregated to ONE signal per
     company (not one per device) and pinned below the auto bar — it is a standing
     fact, not a dated event. Don't "fix" it by dating it today and letting it score.
+12. **Nothing about THIS user's business may live in code.** This is heading for
+    multi-tenant SaaS sold to other life science instrument companies, so the
+    freeze-drying microscope, the lyobead generator, the 14 signal types, the
+    detection keywords, the ICP criteria and every scoring threshold are one
+    customer's configuration — not defaults, not constants, not fallbacks in a
+    `.get()`. A second customer selling chromatography columns must need zero code
+    changes. This generalises #4: no signal type is named in logic, and neither is
+    a product, a company, a keyword or a threshold. Anything currently global
+    (`config.yaml`, `data/taxonomy.yaml`, `detection.keywords`) becomes per-tenant;
+    the `tenant_id` columns are already there and already threaded through.
+
+## Future work
+
+**Onboarding generator.** Customer enters their company name and what they sell;
+Claude generates a starting signal taxonomy and ICP definition, which they then
+refine. Doubles as the self-serve demo — it's what turns "here is an empty
+scoring engine" into something a stranger can evaluate in five minutes.
+
+Two constraints on it:
+
+- **Needs API access.** Not buildable on the current no-key setup, and the
+  no-key manual path must keep working for customers who never turn it on.
+- **Generated weights are a starting point, never authoritative.** They come from
+  a model guessing at a market it has not sold into. The UI must say so, and the
+  numbers must be editable before anything is scored against them — otherwise a
+  customer inherits invented thresholds as if they were evidence. This user's own
+  weights came from real conversion data; a generated set has no such backing.
 
 ## portable/
 
