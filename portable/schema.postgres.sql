@@ -137,6 +137,41 @@ CREATE INDEX ix_contacts_company_id ON contacts (company_id);
 CREATE INDEX ix_contacts_tenant_company ON contacts (tenant_id, company_id);
 CREATE INDEX ix_contacts_tenant_id ON contacts (tenant_id);
 
+CREATE TABLE directory_entries (
+	id SERIAL NOT NULL, 
+	tenant_id INTEGER NOT NULL, 
+	name VARCHAR(300) NOT NULL, 
+	country VARCHAR(100), 
+	size_band VARCHAR(50), 
+	device_count INTEGER, 
+	device_count_is_floor BOOLEAN NOT NULL, 
+	highest_risk_class VARCHAR(30), 
+	device_keywords TEXT, 
+	example_devices TEXT, 
+	source VARCHAR(40) NOT NULL, 
+	source_ref VARCHAR(120), 
+	detail_url VARCHAR(600), 
+	reviewed BOOLEAN NOT NULL, 
+	dismissed BOOLEAN NOT NULL, 
+	notes TEXT, 
+	company_id INTEGER, 
+	first_seen DATE NOT NULL, 
+	last_seen DATE NOT NULL, 
+	created_by VARCHAR(120), 
+	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
+	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_directory_source_ref UNIQUE (tenant_id, source, source_ref), 
+	CONSTRAINT ck_directory_source CHECK (source IN ('eudamed','mhra','manual')), 
+	FOREIGN KEY(company_id) REFERENCES companies (id) ON DELETE SET NULL
+);
+
+CREATE INDEX ix_directory_entries_company_id ON directory_entries (company_id);
+CREATE INDEX ix_directory_entries_country ON directory_entries (country);
+CREATE INDEX ix_directory_entries_size_band ON directory_entries (size_band);
+CREATE INDEX ix_directory_entries_tenant_id ON directory_entries (tenant_id);
+CREATE INDEX ix_directory_tenant_country ON directory_entries (tenant_id, country);
+
 CREATE TABLE score_snapshots (
 	id SERIAL NOT NULL, 
 	tenant_id INTEGER NOT NULL, 

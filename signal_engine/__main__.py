@@ -162,6 +162,32 @@ def cmd_detect(args) -> int:
     return 0
 
 
+def cmd_directory(args) -> int:
+    from .db import session_scope
+    from .directory import build_directory
+
+    _ensure_ready()
+
+    print(
+        "Walking the EU and UK device registers. This is slow — EUDAMED pages a\n"
+        "three-million-row table — so expect several minutes.\n"
+    )
+
+    with session_scope() as session:
+        report = build_directory(
+            session,
+            keywords=args.keyword or None,
+            sources=args.source or None,
+            dry_run=args.dry_run,
+        )
+        print()
+        print(report.render())
+        print()
+        if args.dry_run:
+            session.rollback()
+    return 0
+
+
 def cmd_demo(_args) -> int:
     from .demo import load_demo
 
@@ -260,6 +286,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="also look for companies you don't track yet (they arrive for review)",
     )
     p.set_defaults(func=cmd_detect)
+
+    p = sub.add_parser(
+        "directory-refresh",
+        help="rebuild the ICP research directory from the EU and UK device registers",
+    )
+    p.add_argument(
+        "--keyword", action="append",
+        help="limit to one device keyword (repeatable). Default: icp.device_keywords.",
+    )
+    p.add_argument(
+        "--source", action="append",
+        help="limit to one register (eudamed, mhra). Repeatable. Default: both.",
+    )
+    p.add_argument("--dry-run", action="store_true", help="preview only, write nothing")
+    p.set_defaults(func=cmd_directory)
 
     p = sub.add_parser("purge-contacts", help="delete ALL personal data, keeping scoring intact")
     p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")

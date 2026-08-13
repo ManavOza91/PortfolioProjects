@@ -108,6 +108,10 @@ class Config:
         return self.raw.get("detection", {})
 
     @property
+    def icp(self) -> dict[str, Any]:
+        return self.raw.get("icp", {})
+
+    @property
     def server(self) -> dict[str, Any]:
         return self.raw.get("server", {})
 

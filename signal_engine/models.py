@@ -397,5 +397,72 @@ class BuddySnapshot(Base):
     )
 
 
+class DirectoryEntry(Base):
+    """A company that fits the ICP but has never fired a signal.
+
+    This is a SEPARATE TABLE from `companies` on purpose, and that separation is
+    the whole design. Fit is what a company IS; a signal is what it DID. Only the
+    second earns a place in the pipeline. Because directory entries are not rows
+    in `companies`, every query that builds the priority queue, the Buddy Score
+    or any report is structurally incapable of seeing them — there is no filter
+    to forget and no flag to get wrong.
+
+    Nothing here is ranked. The attributes are coarse and mostly shared, so any
+    ordering would sort by how much we happen to know rather than by fit. It is a
+    filtered directory to research, not a queue to work.
+
+    `company_id` links an entry to a real company if one later earns its way in.
+    """
+
+    __tablename__ = "directory_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, default=1, nullable=False, index=True)
+
+    name: Mapped[str] = mapped_column(String(300), nullable=False)
+    country: Mapped[Optional[str]] = mapped_column(String(100), index=True)
+
+    # Every attribute is nullable and every unknown stays NULL. A missing value
+    # must never be stored as a zero, or absence of evidence reads as evidence.
+    size_band: Mapped[Optional[str]] = mapped_column(String(50), index=True)
+    device_count: Mapped[Optional[int]] = mapped_column(Integer)
+    device_count_is_floor: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    highest_risk_class: Mapped[Optional[str]] = mapped_column(String(30))
+    device_keywords: Mapped[Optional[str]] = mapped_column(Text)  # comma-separated
+    example_devices: Mapped[Optional[str]] = mapped_column(Text)
+
+    source: Mapped[str] = mapped_column(String(40), nullable=False)  # eudamed | mhra
+    source_ref: Mapped[Optional[str]] = mapped_column(String(120))   # SRN / org id
+    detail_url: Mapped[Optional[str]] = mapped_column(String(600))
+
+    # Set when this entry has been looked at, so a refresh does not resurface it.
+    reviewed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    dismissed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    company_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("companies.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    first_seen: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    last_seen: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(String(120))
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "source", "source_ref", name="uq_directory_source_ref"
+        ),
+        Index("ix_directory_tenant_country", "tenant_id", "country"),
+        CheckConstraint(
+            "source IN ('eudamed','mhra','manual')",
+            name="ck_directory_source",
+        ),
+    )
+
+
 # Convenience: tables that hold personal data, for the purge operation.
 PERSONAL_DATA_TABLES = (Contact.__tablename__,)

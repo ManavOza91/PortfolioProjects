@@ -7,7 +7,7 @@ watchlists, never fetch queues. Output is a ranked company queue with a stated r
 finding the right person is a manual step the user does themselves.
 
 **Heading for multi-tenant SaaS** sold to other life science instrument companies —
-see load-bearing decision 12 before adding anything.
+see load-bearing decision 14 before adding anything.
 
 ## Working rules (user is on a Pro plan with a 5-hour limit — respect these)
 
@@ -35,6 +35,7 @@ SQLite via SQLAlchemy 2.0 + Alembic, Anthropic SDK with `messages.parse()`.
 | `signal_engine/ingest.py` | Write path: notes → companies/signals/contacts/activity |
 | `signal_engine/llm/parser.py` | Prompt + dynamic Pydantic schema built from taxonomy |
 | `signal_engine/detect/` | Auto-detection; one module per source + `runner.py` (all judgement) |
+| `signal_engine/directory.py` | ICP research directory — separate table, no scores, no rank |
 | `signal_engine/reporting.py` | Read path for the dashboard |
 | `signal_engine/web/` | FastAPI app, templates, CSS |
 | `portable/` | Stack-agnostic spec for a rebuild elsewhere (see below) |
@@ -42,7 +43,7 @@ SQLite via SQLAlchemy 2.0 + Alembic, Anthropic SDK with `messages.parse()`.
 
 Commands: `./run.sh` (or `.\run.ps1` on Windows) — also `demo`, `seed`, `rescore`,
 `import [--dry-run]`, `detect [--dry-run|--source|--since|--backfill|--discover]`, `parser-check`,
-`export-portable`, `purge-contacts`, `test`.
+`directory-refresh [--dry-run|--keyword|--source]`, `export-portable`, `purge-contacts`, `test`.
 
 ## Built vs not
 
@@ -101,7 +102,26 @@ SBIR was **removed** (US-only, permanently `TooManyRequestsError` at source).
 11. **EUDAMED publishes no registration date.** It is aggregated to ONE signal per
     company (not one per device) and pinned below the auto bar — it is a standing
     fact, not a dated event. Don't "fix" it by dating it today and letting it score.
-12. **Nothing about THIS user's business may live in code.** This is heading for
+12. **`directory_entries` is a separate table from `companies`, and must stay one.**
+    Fit is what a company IS; a signal is what it DID, and only the second earns
+    pipeline entry. Because directory rows are not companies, the queue, the Buddy
+    Score and every report are structurally unable to see them — no filter to
+    forget, no flag to get wrong. Guarded by `tests/test_directory.py`. Also:
+    **the directory is never ranked.** The ICP attributes are coarse and mostly
+    shared, so any ordering sorts by how much we happen to know rather than by
+    fit. It is filtered and alphabetical. Don't add a fit score.
+13. **Unknown is not zero.** Every directory attribute is nullable and a NULL
+    renders as "unknown". `target_size_bands` includes `unknown` on purpose — if
+    absence of evidence excluded a company, the list would be the companies we
+    happen to have data on rather than the companies that fit. Corollary:
+    **a floor device count may only confirm the unbounded top size band.**
+    "At least 3" fits a micro business and bioMérieux equally, so anything below
+    `large` stays unknown (`size_band(..., is_floor=True)`).
+    Also: **IVDR risk class is the only working IVD filter EUDAMED offers.**
+    Classes A–D are IVDs; I/IIa/IIb/III are MDR. There is no country, category
+    or legislation filter that works — trade-name search finds almost nothing
+    because trade names are brand names. Don't replace the sweep with keywords.
+14. **Nothing about THIS user's business may live in code.** This is heading for
     multi-tenant SaaS sold to other life science instrument companies, so the
     freeze-drying microscope, the lyobead generator, the 14 signal types, the
     detection keywords, the ICP criteria and every scoring threshold are one

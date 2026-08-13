@@ -303,6 +303,60 @@ as you learn how your market phrases things.
 
 ---
 
+## The research directory — `./run.sh directory-refresh`
+
+Two different questions, answered in two columns that never mix:
+
+| | **Signalled** | **Worth a look** |
+|---|---|---|
+| Why it's there | A signal fired — what it **did** | It fits the ICP — what it **is** |
+| Ranked? | Yes, by live signal strength | **No** |
+| In the priority queue? | Yes | **Never** |
+| What you do with it | Contact now | Research when you have time |
+
+The directory is built from EUDAMED and MHRA — the registers of who actually
+sells IVDs in your territories. It filters on territory, device-type keyword and
+size, all of which live in `config.yaml` under `icp:`.
+
+**It is deliberately not ranked.** The fit attributes are coarse and most
+companies share them, so any ordering would sort by how much we happen to know
+about a company rather than by how well it fits. A confident-looking rank built
+on that would be misleading, so the list is filtered and alphabetical instead.
+
+**Unknown is a real value.** Every attribute can be unknown, and unknown is never
+stored or displayed as zero. Companies with an unknown size stay in the list —
+if missing data excluded them, you'd be looking at the companies we have data on
+rather than the companies that fit.
+
+Directory entries live in their own table, so the queue, the Buddy Score and
+every report are structurally incapable of seeing them. A company gets into the
+pipeline by firing a signal, and by nothing else.
+
+```bash
+./run.sh directory-refresh              # walk both registers (slow — minutes)
+./run.sh directory-refresh --dry-run    # preview, write nothing
+./run.sh directory-refresh --keyword "lateral flow"   # one keyword only
+```
+
+**How it finds IVD companies at all.** EUDAMED has no working country, category
+or legislation filter — but it does filter by risk class, and IVDR devices are
+classified A/B/C/D where MDR devices are I/IIa/IIb/III. So asking for classes
+B, C and D *is* asking for in-vitro diagnostics. That sweep is what returns
+companies; trade-name keyword search barely works, because trade names are brand
+names ("ImmunoCAP", "Anti-CCP"), and it's kept only for the labels it adds.
+Class A is excluded — buffers, stabilisers and specimen receptacles.
+
+**Size is the weakest attribute, and it usually says "unknown".** The sweep
+counts devices it walked past, not a manufacturer's catalogue, so "at least 3"
+fits a micro business and it fits bioMérieux equally well. A floor count can
+therefore only ever confirm the *top* band; everything below stays unknown
+rather than being guessed at. `large` is excluded from `target_size_bands` on
+purpose — cold outbound to large corporates without a signal is what went
+silent — and `unknown` is included, because otherwise you'd only ever see the
+companies we happen to have data on.
+
+---
+
 ## Out of scope, deliberately
 
 - Net-new logo outreach only. No account management, no CRM functionality, no

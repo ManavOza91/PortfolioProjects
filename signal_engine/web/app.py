@@ -21,6 +21,12 @@ from sqlalchemy.orm import Session
 from ..buddy import compute_buddy_score, compute_trend, rollups
 from ..config import get_config, get_taxonomy
 from ..db import get_db
+from ..directory import (
+    DirectoryFilters,
+    browse as browse_directory,
+    directory_total,
+    set_entry_state,
+)
 from ..ingest import (
     create_signal,
     find_or_create_company,
@@ -116,8 +122,70 @@ def dashboard(request: Request, db: DbSession):
             activity=activity_summary(db, days=30),
             totals=totals(db),
             review_count=len(review_queue(db, limit=200)),
+            # Shown beside the queue, never merged into it. The dashboard's two
+            # columns answer different questions: act now vs research later.
+            directory_count=directory_total(db),
         ),
     )
+
+
+@app.get("/directory", response_class=HTMLResponse)
+def directory(
+    request: Request,
+    db: DbSession,
+    territory: str | None = None,
+    keyword: str | None = None,
+    size: str | None = None,
+    show_dismissed: int = 0,
+    page: int = 1,
+):
+    """The ICP research directory. Filtered, never ranked — see directory.py."""
+    result = browse_directory(
+        db,
+        DirectoryFilters(
+            territory=territory or None,
+            keyword=keyword or None,
+            size=size or None,
+            include_dismissed=bool(show_dismissed),
+            page=page,
+        ),
+    )
+    return templates.TemplateResponse(
+        request,
+        "directory.html",
+        _ctx(
+            request,
+            result=result,
+            territory=territory or "",
+            keyword=keyword or "",
+            size=size or "",
+            show_dismissed=show_dismissed,
+        ),
+    )
+
+
+@app.post("/directory/{entry_id}")
+def directory_action(
+    db: DbSession,
+    entry_id: int,
+    action: Annotated[str, Form()],
+    back: Annotated[str, Form()] = "/directory",
+):
+    if action == "dismiss":
+        entry = set_entry_state(db, entry_id, dismissed=True, reviewed=True)
+        msg = "Removed from the directory."
+    elif action == "restore":
+        entry = set_entry_state(db, entry_id, dismissed=False)
+        msg = "Restored."
+    elif action == "reviewed":
+        entry = set_entry_state(db, entry_id, reviewed=True)
+        msg = "Marked as researched."
+    else:
+        raise HTTPException(400, f"Unknown action {action!r}")
+
+    if entry is None:
+        raise HTTPException(404, "Directory entry not found")
+    return _redirect(back, msg)
 
 
 @app.get("/companies", response_class=HTMLResponse)

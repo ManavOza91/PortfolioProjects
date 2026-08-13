@@ -279,6 +279,73 @@ detection:
       ["to present at", "exhibiting at", "poster at", "keynote at"]
 
 # ---------------------------------------------------------------------------
+# ICP — who is worth researching, as opposed to who has fired a signal.
+#
+# This is a DIRECTORY, not a queue. Nothing here is ranked and nothing here can
+# reach the priority queue: fit describes what a company IS, and only a signal —
+# what it DID — earns pipeline entry. Directory entries live in their own table
+# so no report can accidentally blend the two.
+#
+# Every field below is one customer's configuration. A customer selling
+# chromatography columns changes this block and nothing else.
+# ---------------------------------------------------------------------------
+icp:
+  # Which registers to build the directory from, and how far to walk them.
+  sources: ["eudamed", "mhra"]
+  page_size: 20            # EUDAMED caps its page at 20 whatever we ask for
+  max_pages_per_class: 150 # per risk class; raise for a deeper sweep, it's slower
+
+  # THE ICP FILTER, and the reason this returns anything at all. EUDAMED has no
+  # country, legislation or category filter that works — but risk class does, and
+  # IVDR devices are classified A/B/C/D where MDR devices are I/IIa/IIb/III. So
+  # asking for these classes IS asking for in-vitro diagnostics.
+  #
+  # Class A is excluded by default: it is mostly buffers, stabilisers and
+  # specimen receptacles rather than the assays and kits you sell into.
+  eudamed_risk_classes: ["class-b", "class-c", "class-d"]
+
+  # Trade-name keyword search, run in ADDITION to the risk-class sweep. This is a
+  # weak net on its own — EUDAMED matches literal trade names, and trade names are
+  # brand names, so "lateral flow" finds almost nothing. Kept because it labels
+  # entries with what they make, which is what you filter on afterwards.
+  max_pages_per_keyword: 8
+
+  # Territories worth researching. ISO-3166 alpha-2, matched against the EUDAMED
+  # SRN prefix and the MHRA country field. Empty list = accept every territory.
+  territories: ["GB", "IE", "DE", "FR", "NL", "BE", "CH", "SE", "DK", "ES", "IT", "AT"]
+
+  # Device-name keywords that say "this company develops assays or test kits".
+  # These drive the register searches AND get recorded per entry so you can
+  # filter on them afterwards.
+  device_keywords:
+    - "assay"
+    - "test kit"
+    - "reagent"
+    - "immunoassay"
+    - "pcr"
+    - "lateral flow"
+    - "elisa"
+    - "diagnostic kit"
+    - "molecular test"
+
+  # Size is inferred, coarsely, from how many devices a manufacturer has on the
+  # register — it is the only size proxy these registers offer. Anything outside
+  # these bands stays NULL and displays as "unknown", never as zero.
+  size_bands:
+    - {name: "micro",  max_devices: 5}
+    - {name: "small",  max_devices: 25}
+    - {name: "medium", max_devices: 150}
+    - {name: "large",  max_devices: null}   # null = no upper bound
+
+  # Bands considered in-ICP. "large" is deliberately absent: the brief's finding
+  # was that cold outbound to large corporates without a signal went silent.
+  # "unknown" is included — absence of evidence must not exclude a company.
+  target_size_bands: ["micro", "small", "medium", "unknown"]
+
+  # How many entries the directory page shows at once.
+  page_size_display: 50
+
+# ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
 server:

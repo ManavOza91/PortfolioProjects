@@ -88,10 +88,15 @@
   </div>
 </div>
 
-<!-- ============ Queue ============ -->
+<!-- ============ Signalled vs worth a look ============ -->
+<!--
+  Two columns, never blended. The left is a queue: ranked, earned by evidence,
+  act now. The right is a directory: unranked, earned by fit, research later.
+  Merging them would let "looks like a customer" masquerade as "is buying".
+-->
 <div class="panel">
   <h2>
-    Who to contact
+    Signalled — act now
     <span class="sub">ranked by live signal strength — a company appears only because a signal fired</span>
     <span class="spacer" style="flex:1"></span>
     <a href="/companies" class="small">see all &rarr;</a>
@@ -107,6 +112,35 @@
                 from a call, a show, or a LinkedIn reply and it will be parsed into a signal.
                 Companies imported from a spreadsheet stay on the watchlist until then, which
                 is the point.') }}
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <h2>
+    Worth a look — research when you have time
+    <span class="sub">
+      fits the ICP but has fired no signal. Not scored, not ranked, not in your queue
+    </span>
+    <span class="spacer" style="flex:1"></span>
+    <a href="/directory" class="small">open the directory &rarr;</a>
+  </h2>
+  <div class="panel-body tight">
+    {% if directory_count %}
+      <div style="padding:14px 16px">
+        <strong>{{ directory_count }}</strong>
+        {{ 'company' if directory_count == 1 else 'companies' }} match your ICP on
+        the EU and UK device registers.
+        <div class="small muted" style="margin-top:4px">
+          Filter by territory, device type and size in the directory. These stay out
+          of the queue until one of them does something — that is what the queue is for.
+        </div>
+      </div>
+    {% else %}
+      {{ empty('The directory is empty.',
+               'Run <code>./run.sh directory-refresh</code> to build it from the EU and UK
+                device registers. It is a slow batch job — several minutes — and it never
+                touches your queue.') }}
     {% endif %}
   </div>
 </div>

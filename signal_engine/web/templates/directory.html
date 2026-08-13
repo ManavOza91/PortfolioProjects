@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty %}
+{% set nav = "directory" %}
+{% block title %}Directory — Signal Engine{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <div>
+    <h1>Research directory</h1>
+    <div class="sub">
+      Companies that <em>fit</em> — what they are, not what they've done. Nothing here
+      has fired a signal, so nothing here is scored, ranked or in your queue. Filter it
+      when you have time to research; work the queue when you don't.
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-body tight">
+    <form method="get" action="/directory"
+          style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; padding:14px 16px">
+      <label style="display:block">
+        <span class="small muted">Territory</span><br>
+        <select name="territory">
+          <option value="">Any</option>
+          {% for t in result.territories %}
+            <option value="{{ t }}" {{ 'selected' if territory == t }}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label style="display:block">
+        <span class="small muted">Device type</span><br>
+        <select name="keyword">
+          <option value="">Any</option>
+          {% for k in result.keywords %}
+            <option value="{{ k }}" {{ 'selected' if keyword == k }}>{{ k }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label style="display:block">
+        <span class="small muted">Size</span><br>
+        <select name="size">
+          <option value="">Any</option>
+          {% for s in result.sizes %}
+            <option value="{{ s }}" {{ 'selected' if size == s }}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="small" style="display:flex; gap:6px; align-items:center">
+        <input type="checkbox" name="show_dismissed" value="1"
+               {{ 'checked' if show_dismissed }}>
+        Show dismissed
+      </label>
+
+      <button type="submit">Filter</button>
+      {% if territory or keyword or size or show_dismissed %}
+        <a class="small muted" href="/directory">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <strong>{{ result.total }}</strong> matching
+    {{ 'company' if result.total == 1 else 'companies' }}
+    {% if result.pages > 1 %}
+      <span class="small muted">&middot; page {{ result.page }} of {{ result.pages }}</span>
+    {% endif %}
+    <span class="small muted">&middot; listed alphabetically — there is no ranking here</span>
+  </div>
+
+  <div class="panel-body tight">
+    {% if result.entries %}
+      {% for e in result.entries %}
+        <div style="padding:14px 16px; border-bottom:1px solid var(--line);
+                    {{ 'opacity:.55' if e.dismissed }}">
+          <div style="display:flex; gap:10px; align-items:baseline; flex-wrap:wrap">
+            <strong>
+              {% if e.detail_url %}
+                <a href="{{ e.detail_url }}" target="_blank" rel="noopener">{{ e.name }}</a>
+              {% else %}{{ e.name }}{% endif %}
+            </strong>
+            <span class="pill">{{ e.source }}</span>
+            {% if e.reviewed and not e.dismissed %}
+              <span class="pill ok">researched</span>
+            {% endif %}
+            {% if e.dismissed %}<span class="pill warn">dismissed</span>{% endif %}
+          </div>
+
+          <div class="small muted" style="margin-top:4px">
+            <strong>Territory:</strong> {{ e.country or 'unknown' }}
+            &middot; <strong>Size:</strong> {{ e.size_band or 'unknown' }}
+            {%- if e.device_count is not none %}
+              ({{ 'at least ' if e.device_count_is_floor }}{{ e.device_count }}
+              registered device{{ '' if e.device_count == 1 and not e.device_count_is_floor else 's' }})
+            {%- endif %}
+            {%- if e.highest_risk_class %}
+              &middot; <strong>Highest class:</strong>
+              {{ e.highest_risk_class.replace('class-', '')|upper }}
+            {%- endif %}
+          </div>
+
+          {% if e.device_keywords %}
+            <div class="small" style="margin-top:4px">
+              <span class="muted">Matched:</span> {{ e.device_keywords }}
+            </div>
+          {% endif %}
+          {% if e.example_devices %}
+            <div class="small muted" style="margin-top:2px">{{ e.example_devices }}</div>
+          {% endif %}
+
+          <form method="post" action="/directory/{{ e.id }}"
+                style="margin-top:8px; display:flex; gap:8px">
+            <input type="hidden" name="back" value="{{ request.url.path }}?{{ request.url.query }}">
+            {% if e.dismissed %}
+              <button name="action" value="restore" class="small">Restore</button>
+            {% else %}
+              <button name="action" value="reviewed" class="small">Mark researched</button>
+              <button name="action" value="dismiss" class="small">Not a fit</button>
+            {% endif %}
+          </form>
+        </div>
+      {% endfor %}
+    {% else %}
+      {{ empty("Nothing matches those filters. Run <code>./run.sh directory-refresh</code> to build the directory, or widen the filters.") }}
+    {% endif %}
+  </div>
+
+  {% if result.pages > 1 %}
+    <div class="panel-body tight" style="padding:12px 16px; display:flex; gap:12px">
+      {% set q = 'territory=' ~ territory ~ '&keyword=' ~ keyword ~ '&size=' ~ size ~ '&show_dismissed=' ~ show_dismissed %}
+      {% if result.page > 1 %}
+        <a href="/directory?{{ q }}&page={{ result.page - 1 }}">&larr; Previous</a>
+      {% endif %}
+      {% if result.page < result.pages %}
+        <a href="/directory?{{ q }}&page={{ result.page + 1 }}">Next &rarr;</a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}
