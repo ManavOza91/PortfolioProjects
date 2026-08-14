@@ -311,8 +311,14 @@ icp:
   max_pages_per_keyword: 8
 
   # Territories worth researching. ISO-3166 alpha-2, matched against the EUDAMED
-  # SRN prefix and the MHRA country field. Empty list = accept every territory.
-  territories: ["GB", "IE", "DE", "FR", "NL", "BE", "CH", "SE", "DK", "ES", "IT", "AT"]
+  # SRN prefix and the MHRA country field.
+  #
+  # EMPTY = EVERY TERRITORY, which is the default because it is the only one that
+  # isn't a guess about someone's business. Narrow it only if the customer has
+  # actually said they don't sell somewhere. Note that EUDAMED skews heavily to
+  # Chinese manufacturers, so leaving this open makes for a much larger directory
+  # — filter per-search on the Directory page rather than pre-filtering here.
+  territories: []
 
   # Device-name keywords that say "this company develops assays or test kits".
   # These drive the register searches AND get recorded per entry so you can

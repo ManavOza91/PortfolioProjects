@@ -146,13 +146,33 @@ def test_large_manufacturers_are_filtered_out(session):
     assert report.entries_added == 0
 
 
-def test_a_company_outside_the_territories_is_filtered_out(session):
+def test_a_company_outside_the_territories_is_filtered_out(session, monkeypatch):
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().icp, "territories", ["GB", "DE"])
     report = _build(session, [
         Candidate(name="Faraway Diagnostics", source="eudamed", source_ref="BR-MF-1",
                   country="BR", keywords={"assay"}),
     ])
 
     assert report.skipped_out_of_territory == 1
+
+
+def test_no_configured_territories_means_every_territory(session, monkeypatch):
+    """The shipped default is empty, because any list is a guess about a business.
+
+    Filtering belongs on the Directory page, per search — not baked into the build.
+    """
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().icp, "territories", [])
+    report = _build(session, [
+        Candidate(name="Faraway Diagnostics", source="eudamed", source_ref="BR-MF-1",
+                  country="BR", keywords={"assay"}),
+    ])
+
+    assert report.skipped_out_of_territory == 0
+    assert report.entries_added == 1
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +326,13 @@ def test_a_swept_device_count_is_always_marked_as_a_floor(session, monkeypatch):
 
 
 def test_the_sweep_discards_out_of_territory_rows_as_it_goes(session, monkeypatch):
-    """Otherwise we accumulate tens of thousands of rows just to throw them away."""
+    """When territories ARE configured, drop rows during the walk.
+
+    Otherwise we accumulate tens of thousands of rows just to throw them away.
+    """
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().icp, "territories", ["SE"])
     monkeypatch.setattr(dirmod, "fetch", lambda *a, **k: ({"last": True, "content": [
         {"manufacturerName": "Nanjing Vazyme", "manufacturerSrn": "CN-MF-1",
          "riskClass": {"code": "refdata.risk-class.class-b"}},
