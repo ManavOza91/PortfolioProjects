@@ -109,7 +109,7 @@ class BuildReport:
             f"  {self.entries_added:>4}  added to the directory",
             f"  {self.entries_updated:>4}  already listed, details refreshed",
             f"  {self.skipped_already_a_company:>4}  already in your pipeline (skipped)",
-            f"  {self.skipped_out_of_territory:>4}  outside your territories",
+            f"  {self.skipped_out_of_territory:>4}  outside your territories, or excluded",
             f"  {self.skipped_wrong_size:>4}  outside your target size bands",
         ]
         if self.errors:
@@ -169,10 +169,11 @@ def build_directory(
     report.candidates_found = len(candidates)
 
     territories = {t.upper() for t in icp.get("territories", []) or []}
+    excluded = {t.upper() for t in icp.get("exclude_territories", []) or []}
     target_bands = set(icp.get("target_size_bands", []) or [])
 
     for candidate in candidates.values():
-        if territories and candidate.country and candidate.country.upper() not in territories:
+        if not _in_territory(candidate.country, territories, excluded):
             report.skipped_out_of_territory += 1
             continue
         # An unknown country is NOT grounds for exclusion — absence of evidence.
@@ -195,6 +196,22 @@ def build_directory(
     else:
         session.flush()
     return report
+
+
+def _in_territory(
+    country: str | None, allowed: set[str], excluded: set[str]
+) -> bool:
+    """One rule, used by both the sweep and the write path so they can't diverge.
+
+    An unknown country always passes. We cannot prove it is somewhere you don't
+    sell, and dropping it would quietly turn "unknown" into a reason to exclude.
+    """
+    if not country:
+        return True
+    code = country.upper()
+    if allowed and code not in allowed:
+        return False
+    return code not in excluded
 
 
 def size_band(device_count: int | None, *, is_floor: bool = False) -> str | None:
@@ -308,6 +325,7 @@ def _sweep_eudamed_class(
     page_size = int(icp.get("page_size", 20))
     max_pages = int(icp.get("max_pages_per_class", 150))
     territories = {t.upper() for t in icp.get("territories", []) or []}
+    excluded = {t.upper() for t in icp.get("exclude_territories", []) or []}
 
     for page in range(max_pages):
         payload, error = fetch(
@@ -340,9 +358,11 @@ def _sweep_eudamed_class(
             match = _SRN_COUNTRY.match(srn)
             if match:
                 country = match.group(1)
-            # Skip out-of-territory rows here rather than accumulating tens of
-            # thousands of Chinese manufacturers just to discard them later.
-            if territories and country and country.upper() not in territories:
+            # Apply the territory rule here rather than accumulating tens of
+            # thousands of rows just to discard them at the end. Note this does not
+            # make the run faster — the register is still paged through in full —
+            # it just raises how much of each page is worth keeping.
+            if not _in_territory(country, territories, excluded):
                 continue
 
             key = f"eudamed:{srn or normalise_name(name)}"

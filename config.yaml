@@ -320,6 +320,12 @@ icp:
   # — filter per-search on the Directory page rather than pre-filtering here.
   territories: []
 
+  # Territories to leave OUT, which is the useful knob when you sell nearly
+  # everywhere. Applied after `territories`, so it works with an empty allow-list.
+  # A company whose country is unknown is NEVER excluded here — absence of
+  # evidence is not evidence that it's somewhere you don't sell.
+  exclude_territories: []
+
   # Device-name keywords that say "this company develops assays or test kits".
   # These drive the register searches AND get recorded per entry so you can
   # filter on them afterwards.

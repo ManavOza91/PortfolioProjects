@@ -158,6 +158,41 @@ def test_a_company_outside_the_territories_is_filtered_out(session, monkeypatch)
     assert report.skipped_out_of_territory == 1
 
 
+def test_an_excluded_territory_is_dropped_even_with_an_open_allow_list(
+    session, monkeypatch
+):
+    """"I sell everywhere except X" is the realistic case; an allow-list can't say it."""
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().icp, "territories", [])
+    monkeypatch.setitem(get_config().icp, "exclude_territories", ["CN"])
+
+    report = _build(session, [
+        Candidate(name="Nanjing Vazyme", source="eudamed", source_ref="CN-MF-1",
+                  country="CN", keywords={"assay"}),
+        Candidate(name="Phadia AB", source="eudamed", source_ref="SE-MF-1",
+                  country="SE", keywords={"assay"}),
+    ])
+
+    assert report.skipped_out_of_territory == 1
+    assert report.entries_added == 1
+    assert session.scalars(select(DirectoryEntry)).one().name == "Phadia AB"
+
+
+def test_an_unknown_country_is_never_excluded(session, monkeypatch):
+    """We can't prove it's in the excluded country, so it stays."""
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().icp, "exclude_territories", ["CN"])
+    report = _build(session, [
+        Candidate(name="Mystery Diagnostics", source="eudamed", source_ref="XX-1",
+                  country=None, keywords={"assay"}),
+    ])
+
+    assert report.skipped_out_of_territory == 0
+    assert report.entries_added == 1
+
+
 def test_no_configured_territories_means_every_territory(session, monkeypatch):
     """The shipped default is empty, because any list is a guess about a business.
 
