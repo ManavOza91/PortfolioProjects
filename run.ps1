@@ -5,6 +5,8 @@
 #   .\run.ps1 demo             load a worked example
 #   .\run.ps1 detect           check public sources for new signals
 #   .\run.ps1 detect --dry-run see what it would find, write nothing
+#   .\run.ps1 detect --backfill      sweep the last 24 months
+#   .\run.ps1 directory-refresh      build the ICP research directory (slow)
 #   .\run.ps1 test             run the test suite
 #   .\run.ps1 import -dry-run  preview a CSV import
 #   .\run.ps1 export-portable  regenerate portable/

@@ -8,6 +8,8 @@
 #   ./run.sh demo             load a worked example
 #   ./run.sh detect           check public sources for new signals
 #   ./run.sh detect --dry-run see what it would find, write nothing
+#   ./run.sh detect --backfill      sweep the last 24 months
+#   ./run.sh directory-refresh      build the ICP research directory (slow)
 #   ./run.sh test             run the tests
 #   ./run.sh purge-contacts   delete all personal data
 #
