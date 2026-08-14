@@ -290,8 +290,67 @@ detection:
 # chromatography columns changes this block and nothing else.
 # ---------------------------------------------------------------------------
 icp:
+  # REGIONS — the axis you actually work by. Four working lists plus a catch-all,
+  # so no single tab gets crowded.
+  #
+  # Applied to the signalled queue and the research directory SEPARATELY. Regions
+  # slice each list; they never merge the two. A company with a signal and a
+  # company that merely fits are still different things in the same region.
+  #
+  # Region membership is not the same as which territories get swept — see
+  # `territories` / `exclude_territories` below. You can hold China in the Asia
+  # region while excluding it from sweeps.
+  #
+  # The catch-all region also holds companies whose country is unknown, so that
+  # nothing is ever unreachable. The row itself still shows "unknown" rather than
+  # claiming a location.
+  regions:
+    - name: "US"
+      countries: ["US"]
+    - name: "EU"
+      countries: ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE",
+                  "GR", "EL", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL",
+                  "PT", "RO", "SK", "SI", "ES", "SE",
+                  "NO", "IS", "LI", "CH"]        # EEA + Switzerland
+    - name: "UK"
+      countries: ["GB"]
+    - name: "Asia"
+      countries: ["CN", "JP", "KR", "TW", "HK", "MO", "SG", "MY", "TH", "VN", "ID",
+                  "PH", "IN", "PK", "BD", "LK", "NP", "KH", "LA", "MM", "MN", "BN",
+                  "KZ", "KG", "UZ", "TJ", "TM"]
+    - name: "Rest of world"
+      countries: []
+      catch_all: true
+
   # Which registers to build the directory from, and how far to walk them.
-  sources: ["eudamed", "mhra"]
+  sources: ["eudamed", "mhra", "openfda"]
+
+  # US (and elsewhere) device registrations via openFDA registration & listing.
+  # Parts 862 / 864 / 866 of 21 CFR are exactly the in-vitro diagnostic parts —
+  # clinical chemistry, haematology & pathology, immunology & microbiology — so
+  # they do the job here that IVDR risk class does in EUDAMED.
+  #
+  # Unlike EUDAMED this endpoint has a working country filter, so the sweep asks
+  # for the territories you want instead of walking everything and discarding it.
+  openfda:
+    enabled: true
+    url: "https://api.fda.gov/device/registrationlisting.json"
+    ivd_regulation_parts: ["862", "864", "866"]
+    page_size: 100
+    max_pages_per_part: 20
+
+    # The register also lists repackagers, importers, exporters and complaint-file
+    # addresses — a first pass returned DHL Supply Chain and a dental alloy maker.
+    # These fragments are matched against `establishment_type`; a row matching none
+    # of them is not somebody who makes diagnostics.
+    #
+    # "Develop Specifications" is deliberately included: a company that designs an
+    # assay and has it built elsewhere is exactly the buyer, not a false positive.
+    # A row with NO establishment type is kept — unknown is not grounds to exclude.
+    establishment_types:
+      - "Manufacture Medical Device"
+      - "Contract Manufacturer"
+      - "Develop Specifications"
   page_size: 20            # EUDAMED caps its page at 20 whatever we ask for
   max_pages_per_class: 150 # per risk class; raise for a deeper sweep, it's slower
 

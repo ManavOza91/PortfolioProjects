@@ -113,12 +113,16 @@ def ranked_queue(
     tiers: set[str] | None = None,
     product_fit: str | None = None,
     include_unsignalled: bool = False,
+    region: str | None = None,
     as_of: dt.date | None = None,
 ) -> list[QueueRow]:
     """Companies with active signals, strongest first.
 
     Companies with no signal do not appear unless explicitly asked for. That is the
     whole thesis: no signal, no entry.
+
+    `region` slices this queue only. It never merges in the research directory —
+    a region is a view over the signalled list, not a combined list.
     """
     cfg = get_config()
     tenant_id = tenant_id if tenant_id is not None else cfg.tenant_id
@@ -132,6 +136,10 @@ def ranked_queue(
     companies = list(
         session.scalars(select(Company).where(Company.tenant_id == tenant_id))
     )
+    if region:
+        from .directory import region_for
+
+        companies = [c for c in companies if region_for(c.country) == region]
     if not companies:
         return []
 

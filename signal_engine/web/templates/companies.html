@@ -17,17 +17,33 @@
   <a href="/add" class="btn">Add a note</a>
 </div>
 
+{# Region tabs over the SIGNALLED queue. The research directory has its own tabs
+   with its own counts — these numbers count companies that fired a signal, and
+   nothing here is ever added to a directory count. #}
+{% set keep = ('&tier=' ~ tier if tier else '') ~ ('&product=' ~ product if product else '') ~ ('&show_all=1' if show_all else '') %}
 <div class="filters">
-  <a href="/companies{{ '?show_all=1' if show_all }}" class="{{ 'on' if not tier and not product }}">All tiers</a>
+  <a href="/companies?{{ keep[1:] if keep else '' }}" class="{{ 'on' if not region }}">
+    All regions <span class="muted">({{ region_counts.values()|sum }})</span>
+  </a>
+  {% for name, count in region_counts.items() %}
+    <a href="/companies?region={{ name|urlencode }}{{ keep }}" class="{{ 'on' if region == name }}">
+      {{ name }} <span class="muted">({{ count }})</span>
+    </a>
+  {% endfor %}
+</div>
+
+{% set keepr = ('&region=' ~ region if region else '') ~ ('&show_all=1' if show_all else '') %}
+<div class="filters">
+  <a href="/companies?{{ keepr[1:] if keepr else '' }}" class="{{ 'on' if not tier and not product }}">All tiers</a>
   {% for t in ['A', 'B', 'C', 'D'] %}
-    <a href="/companies?tier={{ t }}{{ '&show_all=1' if show_all }}" class="{{ 'on' if tier == t }}">Tier {{ t }}</a>
+    <a href="/companies?tier={{ t }}{{ keepr }}" class="{{ 'on' if tier == t }}">Tier {{ t }}</a>
   {% endfor %}
   <span style="width:14px"></span>
   {% for p, label in [('A', 'Product A'), ('B', 'Product B')] %}
-    <a href="/companies?product={{ p }}{{ '&show_all=1' if show_all }}" class="{{ 'on' if product == p }}">{{ label }}</a>
+    <a href="/companies?product={{ p }}{{ keepr }}" class="{{ 'on' if product == p }}">{{ label }}</a>
   {% endfor %}
   <span style="width:14px"></span>
-  <a href="/companies?{{ '' if show_all else 'show_all=1' }}" class="{{ 'on' if show_all }}">
+  <a href="/companies?{{ ('region=' ~ region ~ '&' if region else '') }}{{ '' if show_all else 'show_all=1' }}" class="{{ 'on' if show_all }}">
     {{ 'Hide' if show_all else 'Show' }} unsignalled watchlist
   </a>
 </div>

@@ -16,10 +16,31 @@
   </div>
 </div>
 
+{# Region tabs. These slice the DIRECTORY only — the signalled queue has its own
+   set with its own counts. The two lists are never combined. #}
+<div class="panel">
+  <div class="panel-body tight">
+    <div style="display:flex; gap:6px; flex-wrap:wrap; padding:12px 16px">
+      <a href="/directory" class="pill {{ 'ok' if not region }}">
+        All <span class="muted">({{ result.region_counts.values()|sum }})</span>
+      </a>
+      {% for name, count in result.region_counts.items() %}
+        <a href="/directory?region={{ name|urlencode }}"
+           class="pill {{ 'ok' if region == name }}">
+          {{ name }} <span class="muted">({{ count }})</span>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
 <div class="panel">
   <div class="panel-body tight">
     <form method="get" action="/directory"
+          data-region="{{ region }}"
           style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; padding:14px 16px">
+      {# Keep the current region when the other filters are applied. #}
+      <input type="hidden" name="region" value="{{ region }}">
       <label style="display:block">
         <span class="small muted">Territory</span><br>
         <select name="territory">
@@ -133,7 +154,7 @@
 
   {% if result.pages > 1 %}
     <div class="panel-body tight" style="padding:12px 16px; display:flex; gap:12px">
-      {% set q = 'territory=' ~ territory ~ '&keyword=' ~ keyword ~ '&size=' ~ size ~ '&show_dismissed=' ~ show_dismissed %}
+      {% set q = 'region=' ~ region ~ '&territory=' ~ territory ~ '&keyword=' ~ keyword ~ '&size=' ~ size ~ '&show_dismissed=' ~ show_dismissed %}
       {% if result.page > 1 %}
         <a href="/directory?{{ q }}&page={{ result.page - 1 }}">&larr; Previous</a>
       {% endif %}

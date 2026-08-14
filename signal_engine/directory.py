@@ -30,7 +30,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from .config import get_config
-from .detect.base import SourceError, fetch
+from .detect.base import SourceError, country_code, fetch
 from .ingest import normalise_name
 from .models import Company, DirectoryEntry
 
@@ -159,6 +159,11 @@ def build_directory(
         for risk_class in icp.get("eudamed_risk_classes", []) or []:
             _sweep_eudamed_class(risk_class, candidates, report, icp)
 
+    # openFDA filters by country server-side, so this leg is fast and targeted
+    # rather than a walk-and-discard.
+    if "openfda" in sources:
+        _collect_openfda(candidates, report, icp)
+
     # Keyword search adds labels, and occasionally a company the sweep missed.
     for keyword in keywords:
         if "eudamed" in sources:
@@ -196,6 +201,67 @@ def build_directory(
     else:
         session.flush()
     return report
+
+
+def regions() -> list[dict]:
+    return list(get_config().icp.get("regions", []) or [])
+
+
+def region_names() -> list[str]:
+    return [str(r.get("name")) for r in regions() if r.get("name")]
+
+
+def catch_all_region() -> str | None:
+    for rule in regions():
+        if rule.get("catch_all"):
+            return str(rule.get("name"))
+    return None
+
+
+def region_for(country: str | None) -> str | None:
+    """Which working list a company belongs in.
+
+    Derived at read time rather than stored, so editing the region config takes
+    effect immediately instead of needing a re-sweep of every register.
+
+    An unknown country lands in the catch-all region. That keeps it reachable —
+    the alternative is a company that exists in the database and appears on no
+    tab at all. The row still displays its territory as "unknown"; being in
+    "Rest of world" is a filing decision, not a claim about where it is.
+    """
+    code = (country or "").upper()
+    if code:
+        for rule in regions():
+            if code in {c.upper() for c in rule.get("countries", []) or []}:
+                return str(rule.get("name"))
+    return catch_all_region()
+
+
+def countries_in_region(name: str) -> tuple[list[str], bool]:
+    """(country codes, is_catch_all) for a region name."""
+    for rule in regions():
+        if str(rule.get("name")) == name:
+            return (
+                [str(c).upper() for c in rule.get("countries", []) or []],
+                bool(rule.get("catch_all")),
+            )
+    return [], False
+
+
+def _region_clause(name: str):
+    """A SQL condition selecting one region, including the catch-all's leftovers."""
+    codes, is_catch_all = countries_in_region(name)
+    if not is_catch_all:
+        return DirectoryEntry.country.in_(codes)
+
+    claimed: set[str] = set()
+    for rule in regions():
+        if not rule.get("catch_all"):
+            claimed |= {str(c).upper() for c in rule.get("countries", []) or []}
+    return or_(
+        DirectoryEntry.country.is_(None),
+        DirectoryEntry.country.not_in(sorted(claimed)),
+    )
 
 
 def _in_territory(
@@ -448,6 +514,131 @@ def _collect_eudamed(
             return
 
 
+def _collect_openfda(
+    out: dict[str, Candidate], report: BuildReport, icp: dict
+) -> None:
+    """US (and any other) device registrations, filtered to the IVD regulation parts.
+
+    21 CFR 862 / 864 / 866 are the in-vitro diagnostic parts, so asking for them is
+    asking for diagnostics — the same move as IVDR risk class in EUDAMED.
+
+    Unlike EUDAMED, this endpoint has a working country filter, so the sweep asks
+    for the territories you want rather than walking everything and discarding it.
+    """
+    src = icp.get("openfda", {}) or {}
+    if not src.get("enabled", True):
+        return
+
+    url = str(src.get("url", "https://api.fda.gov/device/registrationlisting.json"))
+    parts = [str(p) for p in src.get("ivd_regulation_parts", ["862", "864", "866"])]
+    page_size = int(src.get("page_size", 100))
+    max_pages = int(src.get("max_pages_per_part", 20))
+
+    territories = [t.upper() for t in icp.get("territories", []) or []]
+    excluded = {t.upper() for t in icp.get("exclude_territories", []) or []}
+    wanted = [t for t in territories if t not in excluded]
+
+    for part in parts:
+        query = f"products.openfda.regulation_number:{part}*"
+        if wanted:
+            joined = "+OR+".join(f'registration.iso_country_code:"{c}"' for c in wanted)
+            query = f"{query}+AND+({joined})"
+
+        for page in range(max_pages):
+            payload, error = fetch(
+                "openfda", url,
+                params={"search": query, "limit": page_size, "skip": page * page_size},
+            )
+            report.queries_made += 1
+            if error:
+                report.errors.append(error)
+                break
+            if not payload:
+                break
+
+            rows = payload.get("results", []) or []
+            if not rows:
+                break
+
+            wanted_types = [
+                str(t) for t in src.get("establishment_types", []) or []
+            ]
+            for row in rows:
+                if not _is_a_maker(row, wanted_types):
+                    continue
+                _absorb_openfda_row(row, part, out, excluded)
+
+            if len(rows) < page_size:
+                break
+
+
+def _is_a_maker(row: dict, wanted_types: list[str]) -> bool:
+    """Does this establishment actually make or design the device?
+
+    The register lists everyone who touches a device — repackagers, importers,
+    exporters, and addresses that merely hold complaint files. Without this filter
+    a US sweep returns logistics firms and dental labs alongside assay makers.
+
+    No configured types, or a row with no establishment type at all, passes. The
+    first is "the customer hasn't asked to filter"; the second is unknown, and
+    unknown is not grounds for exclusion.
+    """
+    if not wanted_types:
+        return True
+
+    declared = row.get("establishment_type") or []
+    if isinstance(declared, str):
+        declared = [declared]
+    if not declared:
+        return True
+
+    haystack = " | ".join(str(d) for d in declared).casefold()
+    return any(str(t).casefold() in haystack for t in wanted_types)
+
+
+def _absorb_openfda_row(
+    row: dict, part: str, out: dict[str, Candidate], excluded: set[str]
+) -> None:
+    registration = row.get("registration") or {}
+    name = (registration.get("name") or "").strip()
+    if not name:
+        return
+
+    country = (registration.get("iso_country_code") or "").strip().upper() or None
+    if country and country in excluded:
+        return
+
+    reg_number = (registration.get("registration_number") or "").strip()
+    key = f"openfda:{reg_number or normalise_name(name)}"
+
+    proprietary = row.get("proprietary_name") or []
+    if isinstance(proprietary, str):
+        proprietary = [proprietary]
+    examples = [str(p).strip() for p in proprietary[:3] if str(p).strip()]
+
+    candidate = Candidate(
+        name=name,
+        source="openfda",
+        source_ref=reg_number or normalise_name(name),
+        country=country,
+        device_count=1,
+        device_count_is_floor=True,
+        keywords={f"21 CFR {part}"},
+        examples=examples,
+        detail_url=(
+            "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfRL/rl.cfm?lid="
+            f"{reg_number}" if reg_number else None
+        ),
+    )
+    existing = out.get(key)
+    if existing is None:
+        out[key] = candidate
+    else:
+        existing.device_count = (existing.device_count or 0) + 1
+        existing.device_count_is_floor = True
+        existing.merge(candidate)
+
+
 def _collect_mhra(
     keyword: str, out: dict[str, Candidate], report: BuildReport, icp: dict
 ) -> None:
@@ -472,7 +663,7 @@ def _collect_mhra(
             name=name,
             source="mhra",
             source_ref=str(org_id) if org_id else normalise_name(name),
-            country=_country_code(row.get("MAN_COUNTRY")),
+            country=country_code(row.get("MAN_COUNTRY")),
             keywords={keyword},
             detail_url=f"{MHRA_UI}{org_id}" if org_id else None,
         )
@@ -497,29 +688,6 @@ def _worst(a: str | None, b: str | None) -> str | None:
     return max(ranked, key=_RISK_ORDER.index)
 
 
-# Only what the registers actually emit. Anything unrecognised stays unknown
-# rather than being guessed at.
-_COUNTRY_NAMES = {
-    "united kingdom": "GB", "england, united kingdom": "GB",
-    "scotland, united kingdom": "GB", "wales, united kingdom": "GB",
-    "northern ireland, united kingdom": "GB",
-    "ireland": "IE", "germany": "DE", "france": "FR", "netherlands": "NL",
-    "belgium": "BE", "switzerland": "CH", "sweden": "SE", "denmark": "DK",
-    "spain": "ES", "italy": "IT", "austria": "AT", "norway": "NO",
-    "finland": "FI", "poland": "PL", "portugal": "PT", "czech republic": "CZ",
-    "united states": "US", "china": "CN", "singapore": "SG", "japan": "JP",
-}
-
-
-def _country_code(value: str | None) -> str | None:
-    if not value:
-        return None
-    text = " ".join(str(value).split()).strip().casefold()
-    if len(text) == 2:
-        return text.upper()
-    return _COUNTRY_NAMES.get(text)
-
-
 # ---------------------------------------------------------------------------
 # Reading — filters, never a rank
 # ---------------------------------------------------------------------------
@@ -527,6 +695,7 @@ def _country_code(value: str | None) -> str | None:
 
 @dataclass
 class DirectoryFilters:
+    region: str | None = None
     territory: str | None = None
     keyword: str | None = None
     size: str | None = None
@@ -544,6 +713,8 @@ class DirectoryPage:
     territories: list[str]
     keywords: list[str]
     sizes: list[str]
+    region: str | None = None
+    region_counts: dict[str, int] = field(default_factory=dict)
 
 
 def browse(
@@ -561,6 +732,20 @@ def browse(
     where = [DirectoryEntry.tenant_id == tenant_id]
     if not filters.include_dismissed:
         where.append(DirectoryEntry.dismissed.is_(False))
+
+    # Counts for the tab bar are taken BEFORE the region filter, so every tab
+    # shows its own size regardless of which one you're looking at.
+    base = list(where)
+    region_counts = {
+        name: int(session.scalar(
+            select(func.count()).select_from(DirectoryEntry)
+            .where(*base, _region_clause(name))
+        ) or 0)
+        for name in region_names()
+    }
+
+    if filters.region:
+        where.append(_region_clause(filters.region))
     if filters.territory:
         where.append(DirectoryEntry.country == filters.territory.upper())
     if filters.keyword:
@@ -595,6 +780,8 @@ def browse(
         territories=_distinct_territories(session, tenant_id),
         keywords=list(cfg.icp.get("device_keywords", []) or []),
         sizes=[str(b.get("name")) for b in cfg.icp.get("size_bands", []) or []] + ["unknown"],
+        region=filters.region,
+        region_counts=region_counts,
     )
 
 

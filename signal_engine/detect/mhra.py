@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime as dt
 
 from ..config import get_config
-from .base import Detection, DetectorResult, fetch, parse_date
+from .base import Detection, DetectorResult, country_code, fetch, parse_date
 
 PARD_UI = "https://pard.mhra.gov.uk/manufacturer-details/"
 
@@ -109,6 +109,7 @@ class MHRADetector:
                 "last_updated": row.get("LAST_UPDATED_DATE"),
                 "city": row.get("MAN_CITY"),
             },
+            country=country_code(country),
             source_confidence=base_conf,
             unique_per_event=True,
         )

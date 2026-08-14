@@ -25,6 +25,7 @@ from ..directory import (
     DirectoryFilters,
     browse as browse_directory,
     directory_total,
+    region_names,
     set_entry_state,
 )
 from ..ingest import (
@@ -133,6 +134,7 @@ def dashboard(request: Request, db: DbSession):
 def directory(
     request: Request,
     db: DbSession,
+    region: str | None = None,
     territory: str | None = None,
     keyword: str | None = None,
     size: str | None = None,
@@ -143,6 +145,7 @@ def directory(
     result = browse_directory(
         db,
         DirectoryFilters(
+            region=region or None,
             territory=territory or None,
             keyword=keyword or None,
             size=size or None,
@@ -156,6 +159,7 @@ def directory(
         _ctx(
             request,
             result=result,
+            region=region or "",
             territory=territory or "",
             keyword=keyword or "",
             size=size or "",
@@ -194,6 +198,7 @@ def companies(
     db: DbSession,
     tier: str | None = None,
     product: str | None = None,
+    region: str | None = None,
     show_all: int = 0,
 ):
     queue = ranked_queue(
@@ -202,7 +207,19 @@ def companies(
         tiers={tier} if tier else None,
         product_fit=product or None,
         include_unsignalled=bool(show_all),
+        region=region or None,
     )
+    # Per-region counts for the tab bar, each computed over the signalled queue
+    # alone. The directory has its own tabs with its own counts; the two are
+    # never added together.
+    region_counts = {
+        name: len(ranked_queue(
+            db, limit=None, tiers={tier} if tier else None,
+            product_fit=product or None, include_unsignalled=bool(show_all),
+            region=name,
+        ))
+        for name in region_names()
+    }
     return templates.TemplateResponse(
         request,
         "companies.html",
@@ -211,6 +228,8 @@ def companies(
             queue=queue,
             tier=tier,
             product=product,
+            region=region or "",
+            region_counts=region_counts,
             show_all=show_all,
             totals=totals(db),
         ),

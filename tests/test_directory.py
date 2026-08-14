@@ -211,6 +211,189 @@ def test_no_configured_territories_means_every_territory(session, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Regions — four working lists, plus a catch-all so nothing is unreachable
+# ---------------------------------------------------------------------------
+
+
+def test_countries_map_to_their_region():
+    from signal_engine.directory import region_for
+
+    assert region_for("US") == "US"
+    assert region_for("DE") == "EU"
+    assert region_for("CH") == "EU"      # EEA + Switzerland ride with the EU
+    assert region_for("GB") == "UK"
+    assert region_for("CN") == "Asia"
+    assert region_for("JP") == "Asia"
+
+
+def test_an_unplaced_country_lands_in_the_catch_all():
+    """Canada, Brazil, Israel. They must appear somewhere, not vanish."""
+    from signal_engine.directory import region_for
+
+    assert region_for("CA") == "Rest of world"
+    assert region_for("BR") == "Rest of world"
+    assert region_for("IL") == "Rest of world"
+
+
+def test_an_unknown_country_is_reachable_rather_than_invisible():
+    """Filing it under the catch-all is not a claim about where it is."""
+    from signal_engine.directory import region_for
+
+    assert region_for(None) == "Rest of world"
+    assert region_for("") == "Rest of world"
+
+
+def test_region_tabs_split_the_directory_without_losing_anyone(session):
+    _entry(session, "US Assays", country="US")
+    _entry(session, "German Assays", country="DE")
+    _entry(session, "British Assays", country="GB")
+    _entry(session, "Japanese Assays", country="JP")
+    _entry(session, "Canadian Assays", country="CA")
+    _entry(session, "Mystery Assays", country=None)
+
+    page = browse(session)
+    assert page.region_counts == {
+        "US": 1, "EU": 1, "UK": 1, "Asia": 1, "Rest of world": 2,
+    }
+    # Every entry is on exactly one tab: the counts must sum to the total.
+    assert sum(page.region_counts.values()) == page.total == 6
+
+
+def test_filtering_to_one_region(session):
+    _entry(session, "US Assays", country="US")
+    _entry(session, "German Assays", country="DE")
+
+    result = browse(session, DirectoryFilters(region="EU"))
+    assert [e.name for e in result.entries] == ["German Assays"]
+
+
+def test_a_region_filter_composes_with_the_other_filters(session):
+    _entry(session, "German Kits", country="DE", keywords="test kit")
+    _entry(session, "German Reagents", country="DE", keywords="reagent")
+    _entry(session, "US Kits", country="US", keywords="test kit")
+
+    result = browse(session, DirectoryFilters(region="EU", keyword="test kit"))
+    assert [e.name for e in result.entries] == ["German Kits"]
+
+
+def test_regions_slice_the_queue_without_touching_the_directory(
+    session, make_company
+):
+    """The two lists are tabbed the same way, and stay entirely separate."""
+    from signal_engine.reporting import ranked_queue
+    from signal_engine.ingest import create_signal
+
+    company = make_company("Signalled GmbH", country="DE")
+    create_signal(session, company, type_key="regulatory_submission", source="manual")
+    _entry(session, "Fitting GmbH", country="DE")
+
+    eu_queue = ranked_queue(session, region="EU")
+    assert [r.company.name for r in eu_queue] == ["Signalled GmbH"]
+
+    us_queue = ranked_queue(session, region="US")
+    assert us_queue == []
+
+    # And the directory's EU tab shows only the directory entry.
+    assert [e.name for e in browse(session, DirectoryFilters(region="EU")).entries] \
+        == ["Fitting GmbH"]
+
+
+# ---------------------------------------------------------------------------
+# openFDA as a directory source
+# ---------------------------------------------------------------------------
+
+
+OPENFDA_ROW = {
+    "proprietary_name": ["Calcium Arsenazo Reagent Set"],
+    "registration": {
+        "registration_number": "1234567",
+        "name": "High Technology, Inc.",
+        "iso_country_code": "US",
+        "state_code": "RI",
+    },
+    "products": [{"openfda": {"regulation_number": "862.1145"}}],
+}
+
+
+def test_an_openfda_registration_becomes_a_candidate():
+    out: dict = {}
+    dirmod._absorb_openfda_row(OPENFDA_ROW, "862", out, set())
+
+    candidate = out["openfda:1234567"]
+    assert candidate.name == "High Technology, Inc."
+    assert candidate.country == "US"
+    assert candidate.keywords == {"21 CFR 862"}
+    assert candidate.device_count_is_floor is True
+
+
+def test_repackagers_and_importers_are_not_makers():
+    """A first pass returned DHL Supply Chain, because it handles the boxes."""
+    wanted = ["Manufacture Medical Device", "Contract Manufacturer",
+              "Develop Specifications"]
+
+    assert dirmod._is_a_maker(
+        {"establishment_type": ["Manufacture Medical Device"]}, wanted)
+    assert dirmod._is_a_maker(
+        {"establishment_type": ["Develop Specifications But Do Not Manufacture "
+                                "At This Facility"]}, wanted)
+    assert not dirmod._is_a_maker(
+        {"establishment_type": ["Repack or Relabel Medical Device"]}, wanted)
+    assert not dirmod._is_a_maker(
+        {"establishment_type": ["Complaint File Establishment per 21 CFR 820.198"]},
+        wanted)
+
+
+def test_an_establishment_with_no_declared_type_is_kept():
+    """Unknown is not grounds for exclusion, here as everywhere else."""
+    assert dirmod._is_a_maker({}, ["Manufacture Medical Device"])
+
+
+def test_the_ivd_regulation_parts_are_config_not_code():
+    """862/864/866 are the IVD parts, and a customer may need different ones."""
+    from signal_engine.config import get_config
+
+    assert get_config().icp["openfda"]["ivd_regulation_parts"] == ["862", "864", "866"]
+
+
+def test_an_openfda_sweep_asks_the_server_for_the_countries_it_wants(
+    session, monkeypatch
+):
+    """openFDA can filter by country, unlike EUDAMED — so don't walk and discard."""
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().icp, "territories", ["US", "CA"])
+    monkeypatch.setitem(get_config().icp, "exclude_territories", [])
+    queries: list[str] = []
+
+    def _fetch(source, url, *, params=None, **kw):
+        queries.append(params.get("search", ""))
+        return {"results": []}, None
+
+    monkeypatch.setattr(dirmod, "fetch", _fetch)
+    build_directory(session, keywords=[], sources=["openfda"])
+
+    assert queries, "no query was made"
+    assert 'registration.iso_country_code:"US"' in queries[0]
+    assert 'registration.iso_country_code:"CA"' in queries[0]
+    assert "products.openfda.regulation_number:862*" in queries[0]
+
+
+def test_an_excluded_country_never_reaches_the_openfda_query(session, monkeypatch):
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().icp, "territories", ["US", "CN"])
+    monkeypatch.setitem(get_config().icp, "exclude_territories", ["CN"])
+    queries: list[str] = []
+
+    monkeypatch.setattr(dirmod, "fetch", lambda s, u, *, params=None, **kw: (
+        queries.append(params.get("search", "")) or ({"results": []}, None)
+    ))
+    build_directory(session, keywords=[], sources=["openfda"])
+
+    assert 'iso_country_code:"CN"' not in queries[0]
+
+
+# ---------------------------------------------------------------------------
 # Filtering, and the absence of a rank
 # ---------------------------------------------------------------------------
 
@@ -416,9 +599,9 @@ def test_an_mhra_country_name_becomes_a_code(session, monkeypatch):
 
 
 def test_an_unrecognised_country_stays_unknown_rather_than_being_guessed(session):
-    assert dirmod._country_code("Republic of Somewhere") is None
-    assert dirmod._country_code(None) is None
-    assert dirmod._country_code("de") == "DE"
+    assert dirmod.country_code("Republic of Somewhere") is None
+    assert dirmod.country_code(None) is None
+    assert dirmod.country_code("de") == "DE"
 
 
 def test_a_dead_register_is_reported_and_the_run_continues(session, monkeypatch):

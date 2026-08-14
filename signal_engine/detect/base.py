@@ -41,6 +41,11 @@ class Detection:
     external_id: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
+    # ISO-3166 alpha-2 where the source gives it. Carried onto the company so the
+    # queue can be worked by region. None where the source doesn't say — the press
+    # never does — and None must stay None rather than becoming a guess.
+    country: str | None = None
+
     # 0..1, how sure the SOURCE is that this record is what it claims to be.
     # Company matching is applied on top of this by the runner.
     source_confidence: float = 0.9
@@ -264,3 +269,32 @@ def classify_by_keyword(text: str) -> tuple[str | None, str | None]:
             if w and w in haystack and (best_word is None or len(w) > len(best_word)):
                 best_key, best_word = type_key, w
     return best_key, best_word
+
+
+# ---------------------------------------------------------------------------
+# Countries
+# ---------------------------------------------------------------------------
+
+# Only what the registers actually emit. Anything unrecognised stays unknown
+# rather than being guessed at. Lives here rather than in directory.py so the
+# detectors can use it without importing the directory (which imports this).
+_COUNTRY_NAMES = {
+    "united kingdom": "GB", "england, united kingdom": "GB",
+    "scotland, united kingdom": "GB", "wales, united kingdom": "GB",
+    "northern ireland, united kingdom": "GB",
+    "ireland": "IE", "germany": "DE", "france": "FR", "netherlands": "NL",
+    "belgium": "BE", "switzerland": "CH", "sweden": "SE", "denmark": "DK",
+    "spain": "ES", "italy": "IT", "austria": "AT", "norway": "NO",
+    "finland": "FI", "poland": "PL", "portugal": "PT", "czech republic": "CZ",
+    "united states": "US", "china": "CN", "singapore": "SG", "japan": "JP",
+}
+
+
+def country_code(value: str | None) -> str | None:
+    """Normalise a register's country field to ISO-3166 alpha-2, or None."""
+    if not value:
+        return None
+    text = " ".join(str(value).split()).strip().casefold()
+    if len(text) == 2:
+        return text.upper()
+    return _COUNTRY_NAMES.get(text)

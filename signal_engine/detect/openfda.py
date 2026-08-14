@@ -151,6 +151,12 @@ class OpenFDADetector:
                 "country_code": row.get("country_code"),
                 "state": row.get("state"),
             },
+            # openFDA gives a country code, and a US state implies the US when the
+            # country field is blank. No state and no code means unknown, not "US".
+            country=(
+                (row.get("country_code") or "").strip().upper()
+                or ("US" if (row.get("state") or "").strip() else None)
+            ),
             # A clearance is a matter of public record — the source itself is certain.
             # Whether it is OUR company is decided by name matching in the runner.
             source_confidence=0.98,

@@ -458,7 +458,7 @@ class DirectoryEntry(Base):
         ),
         Index("ix_directory_tenant_country", "tenant_id", "country"),
         CheckConstraint(
-            "source IN ('eudamed','mhra','manual')",
+            "source IN ('eudamed','mhra','openfda','manual')",
             name="ck_directory_source",
         ),
     )

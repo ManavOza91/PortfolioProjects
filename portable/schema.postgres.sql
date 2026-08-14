@@ -162,7 +162,7 @@ CREATE TABLE directory_entries (
 	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_directory_source_ref UNIQUE (tenant_id, source, source_ref), 
-	CONSTRAINT ck_directory_source CHECK (source IN ('eudamed','mhra','manual')), 
+	CONSTRAINT ck_directory_source CHECK (source IN ('eudamed','mhra','openfda','manual')), 
 	FOREIGN KEY(company_id) REFERENCES companies (id) ON DELETE SET NULL
 );
 

@@ -351,6 +351,7 @@ def _process(
 
     company, created = find_or_create_company(
         session, name=matched_name or detection.company_name,
+        country=detection.country,
         status="watchlist", created_by="detect",
     )
     new_company = new_company or created
