@@ -117,6 +117,17 @@ FALLBACK_JOBS: list[dict] = [
         "action": "directory",
         "sources": ["openfda"],
     },
+    {
+        "key": "clear-directory",
+        "label": "Empty the directory",
+        "blurb": (
+            "Deletes entries you haven't looked at, so the next refresh rebuilds "
+            "the list under your current ICP settings. Anything you marked "
+            "researched or dismissed is kept. Your companies and signals are in a "
+            "different table and are not touched."
+        ),
+        "action": "clear-directory",
+    },
 ]
 
 
@@ -163,9 +174,25 @@ def _run_directory(job: Job, spec: dict) -> str:
     return report.render()
 
 
+def _run_clear_directory(job: Job, spec: dict) -> str:
+    from .db import session_scope
+    from .directory import clear_unreviewed, directory_total
+
+    with session_scope() as session:
+        removed = clear_unreviewed(session)
+        left = directory_total(session)
+
+    return (
+        f"Cleared {removed} unreviewed entries from the directory.\n"
+        f"{left} remain — the ones you marked researched or dismissed.\n\n"
+        "Run a directory refresh to repopulate it under the current ICP settings."
+    )
+
+
 ACTIONS: dict[str, Callable[[Job, dict], str]] = {
     "detect": _run_detect,
     "directory": _run_directory,
+    "clear-directory": _run_clear_directory,
 }
 
 

@@ -330,7 +330,7 @@ def test_eight_sites_of_one_company_become_one_row():
             },
             "products": [{"owner_operator_number": "1000123"}],
         }
-        dirmod._absorb_openfda_row(row, "862", out, set())
+        dirmod._absorb_openfda_row(row, "class:nucleic", out, set())
 
     assert list(out) == ["openfda:1000123"]
     assert out["openfda:1000123"].source_ref == "1000123"
@@ -338,12 +338,12 @@ def test_eight_sites_of_one_company_become_one_row():
 
 def test_an_openfda_registration_becomes_a_candidate():
     out: dict = {}
-    dirmod._absorb_openfda_row(OPENFDA_ROW, "862", out, set())
+    dirmod._absorb_openfda_row(OPENFDA_ROW, "class:nucleic", out, set())
 
     candidate = out["openfda:10058153"]
     assert candidate.name == "High Technology, Inc."
     assert candidate.country == "US"
-    assert candidate.keywords == {"21 CFR 862"}
+    assert candidate.keywords == {"class:nucleic"}
     assert candidate.device_count_is_floor is True
 
 
@@ -492,6 +492,61 @@ def test_the_ivd_regulation_parts_are_config_not_code():
     assert get_config().icp["openfda"]["ivd_regulation_parts"] == ["862", "864", "866"]
 
 
+def test_the_sweep_asks_what_a_product_is_not_which_regulation_part(
+    session, monkeypatch
+):
+    """"Every IVD in America" is how a machine shop and a dental supplier got in.
+
+    openFDA's classification name says what a product actually is, so the sweep
+    asks for amplification and multiplex assays rather than whole CFR parts.
+    """
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().icp, "territories", ["US"])
+    monkeypatch.setitem(get_config().icp["openfda"], "product_classes", ["nucleic", "dna"])
+    queries: list[str] = []
+
+    monkeypatch.setattr(dirmod, "fetch", lambda s, u, *, params=None, **kw: (
+        queries.append(params.get("search", "")) or ({"results": []}, None)
+    ))
+    build_directory(session, keywords=[], sources=["openfda"])
+
+    assert any('device_name:"nucleic"' in q for q in queries)
+    assert any('device_name:"dna"' in q for q in queries)
+    assert not any("regulation_number" in q for q in queries)
+
+
+def test_it_falls_back_to_regulation_parts_when_no_classes_are_set(
+    session, monkeypatch
+):
+    """An older config with no product_classes must keep working — decision 14."""
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().icp["openfda"], "product_classes", [])
+    queries: list[str] = []
+
+    monkeypatch.setattr(dirmod, "fetch", lambda s, u, *, params=None, **kw: (
+        queries.append(params.get("search", "")) or ({"results": []}, None)
+    ))
+    build_directory(session, keywords=[], sources=["openfda"])
+
+    assert any("regulation_number:862*" in q for q in queries)
+
+
+def test_bare_probe_is_not_a_product_class():
+    """It matches lachrymal, electrode and thermodilution probes — 990 listings."""
+    from signal_engine.config import get_config
+
+    assert "probe" not in get_config().icp["openfda"]["product_classes"]
+
+
+def test_eudamed_sweeps_only_the_higher_risk_classes():
+    """Class B is the broad low-risk bucket and produced most of the volume."""
+    from signal_engine.config import get_config
+
+    assert get_config().icp["eudamed_risk_classes"] == ["class-c", "class-d"]
+
+
 def test_an_openfda_sweep_asks_the_server_for_the_countries_it_wants(
     session, monkeypatch
 ):
@@ -512,7 +567,12 @@ def test_an_openfda_sweep_asks_the_server_for_the_countries_it_wants(
     assert queries, "no query was made"
     assert 'registration.iso_country_code:"US"' in queries[0]
     assert 'registration.iso_country_code:"CA"' in queries[0]
-    assert "products.openfda.regulation_number:862*" in queries[0]
+    # Real spaces. "+AND+" is percent-encoded by httpx into a literal plus, which
+    # openFDA reads as part of the search term — the filter silently stops
+    # applying and the sweep returns the whole register.
+    assert "+AND+" not in queries[0]
+    assert "+OR+" not in queries[0]
+    assert " AND (" in queries[0]
 
 
 def test_an_excluded_country_never_reaches_the_openfda_query(session, monkeypatch):
@@ -655,6 +715,39 @@ def test_an_empty_directory_reports_a_sane_range(session):
     assert (page.first_index, page.last_index, page.total) == (0, 0, 0)
 
 
+def test_clearing_removes_unreviewed_entries_but_keeps_your_decisions(session):
+    """Narrowing the ICP changes what a sweep finds, not what is already listed."""
+    from signal_engine.directory import clear_unreviewed
+
+    untouched = _entry(session, "Never Looked At", country="GB")
+    researched = _entry(session, "Looked At", country="GB")
+    dismissed = _entry(session, "Rejected", country="GB")
+    set_entry_state(session, researched.id, reviewed=True)
+    set_entry_state(session, dismissed.id, dismissed=True)
+
+    removed = clear_unreviewed(session)
+
+    assert removed == 1
+    remaining = {e.name for e in browse(
+        session, DirectoryFilters(include_dismissed=True)
+    ).entries}
+    assert remaining == {"Looked At", "Rejected"}
+    assert untouched.name == "Never Looked At"  # the object, not the row
+
+
+def test_clearing_the_directory_cannot_touch_the_pipeline(session, make_company):
+    """Different table. A research purge must never delete a real company."""
+    from signal_engine.directory import clear_unreviewed
+    from signal_engine.models import Company
+
+    make_company("Real Pipeline Co")
+    _entry(session, "Just A Candidate", country="GB")
+
+    clear_unreviewed(session)
+
+    assert [c.name for c in session.scalars(select(Company))] == ["Real Pipeline Co"]
+
+
 def test_dismissing_an_entry_hides_it_without_deleting_it(session):
     entry = _entry(session, "Not For Us", country="GB")
 
@@ -716,7 +809,7 @@ def test_the_risk_class_sweep_is_what_finds_ivd_companies(session, monkeypatch):
             "manufacturerName": "Phadia AB",
             "manufacturerSrn": "SE-MF-000014170",
             "tradeName": "ImmunoCAP Allergen rx3",
-            "riskClass": {"code": "refdata.risk-class.class-b"},
+            "riskClass": {"code": "refdata.risk-class.class-c"},
         }]}, None
 
     monkeypatch.setattr(dirmod, "fetch", _fetch)
@@ -724,14 +817,13 @@ def test_the_risk_class_sweep_is_what_finds_ivd_companies(session, monkeypatch):
 
     swept = [c.get("riskClassCode") for c in calls if c.get("riskClassCode")]
     assert swept == [
-        "refdata.risk-class.class-b",
         "refdata.risk-class.class-c",
         "refdata.risk-class.class-d",
-    ], "class A is excluded — it is buffers and receptacles, not assays"
+    ], "A is buffers and receptacles; B is the broad low-risk bucket"
 
     entry = session.scalars(select(DirectoryEntry)).one()
     assert entry.country == "SE"
-    assert "IVDR B" in entry.device_keywords
+    assert "IVDR C" in entry.device_keywords
 
 
 def test_a_swept_device_count_is_always_marked_as_a_floor(session, monkeypatch):

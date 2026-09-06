@@ -63,7 +63,7 @@ def test_buttons_still_appear_when_config_predates_the_feature(monkeypatch):
     jobs.reset()
 
     keys = [j.key for j in jobs.all_jobs()]
-    assert keys == ["detect", "directory-eu", "directory-us"]
+    assert keys == ["detect", "directory-eu", "directory-us", "clear-directory"]
     assert jobs.using_fallback_jobs()
 
 

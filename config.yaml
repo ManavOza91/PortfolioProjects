@@ -335,6 +335,38 @@ icp:
   openfda:
     enabled: true
     url: "https://api.fda.gov/device/registrationlisting.json"
+    # WHAT A LYOBEAD PROSPECT'S PRODUCTS LOOK LIKE.
+    #
+    # "Is an IVD maker" was far too broad — 21 CFR 862/864/866 is every clinical
+    # chemistry, haematology and immunology product in America, which is how a
+    # machine shop and a dental supplier ended up on the list.
+    #
+    # These match openFDA's *classification* name (products.openfda.device_name),
+    # which is FDA's standardised description of what the product IS, not the
+    # company's brand name. Amplification, multiplex and probe-based assays are
+    # the formats that use lyophilised unit-dose reagents.
+    #
+    # Live counts when chosen (US listings): nucleic 574, amplification 332, dna
+    # 325, multiplex 130, rna 45, hybridization 29, genotyping 11, polymerase 6.
+    #
+    # Bare "probe" is deliberately absent: it matches 990 listings, most of them
+    # lachrymal probes, electrode probes and thermodilution probes. "dna" catches
+    # the DNA-probe assays without dragging those in.
+    #
+    # When this list is empty the sweep falls back to ivd_regulation_parts below,
+    # which is the old, broad behaviour.
+    product_classes:
+      - "nucleic"
+      - "amplification"
+      - "multiplex"
+      - "dna"
+      - "rna"
+      - "genotyping"
+      - "hybridization"
+      - "polymerase"
+
+    # Fallback only, used when product_classes is empty. 862 = clinical chemistry,
+    # 864 = haematology & pathology, 866 = immunology & microbiology.
     ivd_regulation_parts: ["862", "864", "866"]
     page_size: 100
     max_pages_per_part: 20
@@ -386,9 +418,18 @@ icp:
   # IVDR devices are classified A/B/C/D where MDR devices are I/IIa/IIb/III. So
   # asking for these classes IS asking for in-vitro diagnostics.
   #
-  # Class A is excluded by default: it is mostly buffers, stabilisers and
-  # specimen receptacles rather than the assays and kits you sell into.
-  eudamed_risk_classes: ["class-b", "class-c", "class-d"]
+  # Class A is excluded: mostly buffers, stabilisers and specimen receptacles.
+  # Class B is now excluded too — the broad low-risk bucket, and most of the
+  # volume you didn't want.
+  #
+  # BE HONEST ABOUT THIS ONE. Unlike openFDA, EUDAMED offers no way to filter by
+  # what a product actually IS. Trade names are brand names, and searching them
+  # for "lyophilis", "freeze-dried", "bead", "master mix" or "isothermal" returns
+  # zero rows — measured, not assumed. Risk class is the only lever available, and
+  # C/D (higher-risk, largely infectious disease and molecular) is the closest
+  # proxy for "makes the kind of assay that uses lyobeads". EU entries will stay
+  # coarser than US ones until a better European source exists.
+  eudamed_risk_classes: ["class-c", "class-d"]
 
   # Trade-name keyword search, run in ADDITION to the risk-class sweep. This is a
   # weak net on its own — EUDAMED matches literal trade names, and trade names are
@@ -468,6 +509,10 @@ ui:
       blurb: "Walks openFDA. Minutes, not hours — it filters by country at source."
       action: "directory"
       sources: ["openfda"]
+    - key: "clear-directory"
+      label: "Empty the directory"
+      blurb: "Deletes entries you haven't looked at, so the next refresh rebuilds the list under your current ICP settings. Anything you marked researched or dismissed is kept. Companies and signals are a different table and are not touched."
+      action: "clear-directory"
 
 # ---------------------------------------------------------------------------
 # Server

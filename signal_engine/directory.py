@@ -569,11 +569,26 @@ def _collect_openfda(
     excluded = {t.upper() for t in icp.get("exclude_territories", []) or []}
     wanted = [t for t in territories if t not in excluded]
 
-    for part in parts:
-        query = f"products.openfda.regulation_number:{part}*"
+    # Prefer the product-class filter: it asks what a product IS, using openFDA's
+    # standardised classification name, rather than which broad regulation part it
+    # sits under. "Every IVD in America" was the reason this list got too big.
+    classes = [str(c) for c in src.get("product_classes", []) or []]
+    if classes:
+        legs = [(f'products.openfda.device_name:"{c}"', f"class:{c}") for c in classes]
+    else:
+        legs = [(f"products.openfda.regulation_number:{p}*", f"21 CFR {p}") for p in parts]
+
+    for leg_query, leg_label in legs:
+        query = leg_query
         if wanted:
-            joined = "+OR+".join(f'registration.iso_country_code:"{c}"' for c in wanted)
-            query = f"{query}+AND+({joined})"
+            # Real spaces, never "+AND+". httpx percent-encodes a literal plus as
+            # %2B, so openFDA saw "nucleic+AND+..." as one nonsense term, matched
+            # nothing, and returned 404 — which fetch() reports as "no results"
+            # rather than an error. The sweep then fell through to whatever the
+            # unfiltered leg returned, which is how dental and logistics firms
+            # ended up in a list of molecular diagnostics companies.
+            joined = " OR ".join(f'registration.iso_country_code:"{c}"' for c in wanted)
+            query = f"{query} AND ({joined})"
 
         for page in range(max_pages):
             payload, error = fetch(
@@ -597,7 +612,7 @@ def _collect_openfda(
             for row in rows:
                 if not _is_a_maker(row, wanted_types):
                     continue
-                _absorb_openfda_row(row, part, out, excluded)
+                _absorb_openfda_row(row, leg_label, out, excluded)
 
             if len(rows) < page_size:
                 break
@@ -704,7 +719,7 @@ def _is_a_maker(row: dict, wanted_types: list[str]) -> bool:
 
 
 def _absorb_openfda_row(
-    row: dict, part: str, out: dict[str, Candidate], excluded: set[str]
+    row: dict, leg_label: str, out: dict[str, Candidate], excluded: set[str]
 ) -> None:
     registration = row.get("registration") or {}
     name = (registration.get("name") or "").strip()
@@ -743,7 +758,7 @@ def _absorb_openfda_row(
         device_count=1,
         device_count_is_floor=True,
         owner_ref=owner_ref,
-        keywords={f"21 CFR {part}"},
+        keywords={leg_label},
         examples=examples,
         detail_url=(
             "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfRL/rl.cfm?lid="
@@ -943,6 +958,32 @@ def _distinct_territories(session: Session, tenant_id: int) -> list[str]:
         .order_by(DirectoryEntry.country)
     )
     return [r for r in rows if r]
+
+
+def clear_unreviewed(session: Session, *, tenant_id: int | None = None) -> int:
+    """Delete directory entries you have never looked at. Returns how many went.
+
+    Needed because narrowing the ICP changes what a sweep *finds*, not what is
+    already listed — a tighter filter leaves the old, broader results sitting
+    there. This empties the list so the next sweep repopulates it under the new
+    definition.
+
+    Entries you marked researched or dismissed are KEPT. Those are your decisions,
+    and a dismissed entry is memory that stops the same company resurfacing.
+    Nothing here can touch companies, signals or activity — different table.
+    """
+    tenant_id = tenant_id if tenant_id is not None else get_config().tenant_id
+    doomed = list(session.scalars(
+        select(DirectoryEntry).where(
+            DirectoryEntry.tenant_id == tenant_id,
+            DirectoryEntry.reviewed.is_(False),
+            DirectoryEntry.dismissed.is_(False),
+        )
+    ))
+    for entry in doomed:
+        session.delete(entry)
+    session.flush()
+    return len(doomed)
 
 
 def directory_total(session: Session, *, tenant_id: int | None = None) -> int:
