@@ -351,6 +351,33 @@ icp:
       - "Manufacture Medical Device"
       - "Contract Manufacturer"
       - "Develop Specifications"
+
+    # TRUE SIZE, via one extra query per owner. openFDA will report how many
+    # listings an OWNER/OPERATOR holds, which is the only figure here that tracks
+    # corporate scale — a registration number counts one site, so a multi-site
+    # giant fragments into many small-looking establishments.
+    #
+    #   Stryker Puerto Rico   67 listings at its site   ->  3364 under its owner
+    #   TECO Diagnostics     190 listings at its site   ->   207 under its owner
+    #
+    # Per site, the giant looks SMALLER than the SME. Per owner, they separate.
+    fetch_true_counts: true
+    max_count_lookups: 400
+
+    # Calibrated against real owners, measured 2026-09:
+    #   Medtronic 5123 | Stryker 3364 | Cook 791 | Zimmer 720 | Penumbra 349
+    #   Bio-Rad 342  ||  TECO Diagnostics 207 | High Technology 64 | COGMEDIX 24
+    #   Immundiagnostik 10 | MEDRX 3
+    # Everything you'd want sits at or below 207; everything you wouldn't starts
+    # at 342. The large threshold goes between them.
+    #
+    # These are LISTING counts and a separate scale from icp.size_bands, which
+    # counts EUDAMED devices. Don't merge the two tables.
+    size_bands:
+      - {name: "micro",  max_listings: 10}
+      - {name: "small",  max_listings: 75}
+      - {name: "medium", max_listings: 250}
+      - {name: "large",  max_listings: null}
   page_size: 20            # EUDAMED caps its page at 20 whatever we ask for
   max_pages_per_class: 150 # per risk class; raise for a deeper sweep, it's slower
 

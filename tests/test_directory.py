@@ -311,15 +311,36 @@ OPENFDA_ROW = {
         "iso_country_code": "US",
         "state_code": "RI",
     },
-    "products": [{"openfda": {"regulation_number": "862.1145"}}],
+    "products": [{
+        "openfda": {"regulation_number": "862.1145"},
+        "owner_operator_number": "10058153",
+    }],
 }
+
+
+def test_eight_sites_of_one_company_become_one_row():
+    """Sterigenics registers eight US establishments under one owner."""
+    out: dict = {}
+    for n in range(8):
+        row = {
+            "registration": {
+                "registration_number": f"300000{n}",
+                "name": "Sterigenics U.S., LLC",
+                "iso_country_code": "US",
+            },
+            "products": [{"owner_operator_number": "1000123"}],
+        }
+        dirmod._absorb_openfda_row(row, "862", out, set())
+
+    assert list(out) == ["openfda:1000123"]
+    assert out["openfda:1000123"].source_ref == "1000123"
 
 
 def test_an_openfda_registration_becomes_a_candidate():
     out: dict = {}
     dirmod._absorb_openfda_row(OPENFDA_ROW, "862", out, set())
 
-    candidate = out["openfda:1234567"]
+    candidate = out["openfda:10058153"]
     assert candidate.name == "High Technology, Inc."
     assert candidate.country == "US"
     assert candidate.keywords == {"21 CFR 862"}
@@ -346,6 +367,122 @@ def test_repackagers_and_importers_are_not_makers():
 def test_an_establishment_with_no_declared_type_is_kept():
     """Unknown is not grounds for exclusion, here as everywhere else."""
     assert dirmod._is_a_maker({}, ["Manufacture Medical Device"])
+
+
+def test_openfdas_none_placeholder_counts_as_unknown_not_as_excluded():
+    """openFDA sends [None], not [], when it has nothing to say.
+
+    Stringifying that gave "none", which matched no wanted type and silently
+    dropped the row — a whole US sweep returned zero companies because of it.
+    """
+    wanted = ["Manufacture Medical Device"]
+    assert dirmod._is_a_maker({"establishment_type": [None]}, wanted)
+    assert dirmod._is_a_maker({"establishment_type": [None, ""]}, wanted)
+    # A real type alongside the placeholder is still judged on the real one.
+    assert not dirmod._is_a_maker(
+        {"establishment_type": [None, "Initial Distributor/Importer"]}, wanted)
+
+
+def test_owner_listing_counts_separate_giants_from_smes():
+    """Calibrated live: every target sat at or below 207, every giant at 342+."""
+    from signal_engine.directory import listing_size_band
+
+    assert listing_size_band(3) == "micro"          # MEDRX
+    assert listing_size_band(24) == "small"         # COGMEDIX
+    assert listing_size_band(207) == "medium"       # TECO Diagnostics — a target
+    assert listing_size_band(342) == "large"        # Bio-Rad
+    assert listing_size_band(3364) == "large"       # Stryker
+    assert listing_size_band(5123) == "large"       # Medtronic
+    assert listing_size_band(None) is None
+
+
+def test_the_two_size_scales_are_never_mixed():
+    """openFDA counts listings; EUDAMED counts devices. Same words, different units."""
+    from signal_engine.directory import listing_size_band
+
+    # 207 devices in EUDAMED is a large catalogue; 207 US listings is an SME.
+    assert size_band(207) == "large"
+    assert listing_size_band(207) == "medium"
+
+
+def test_a_true_owner_count_replaces_the_floor_and_sets_a_real_band(
+    session, monkeypatch
+):
+    """Stryker's site lists 67; its owner lists 3364. Only the owner tells the truth."""
+    out = {
+        "openfda:2648666": Candidate(
+            name="STRYKER PUERTO RICO, LLC.", source="openfda",
+            source_ref="2648666", country="US", device_count=1,
+            device_count_is_floor=True, owner_ref="1811755",
+        ),
+    }
+    monkeypatch.setattr(dirmod, "fetch", lambda *a, **k: (
+        {"meta": {"results": {"total": 3364}}}, None
+    ))
+
+    report = dirmod.BuildReport()
+    dirmod._enrich_openfda_sizes(out, report, get_openfda_cfg())
+
+    candidate = out["openfda:2648666"]
+    assert candidate.device_count == 3364
+    assert candidate.device_count_is_floor is False
+    assert candidate.size_band_hint == "large"
+
+
+def test_one_query_per_owner_not_per_site(session, monkeypatch):
+    """A giant's many sites share an owner — asking once is the whole point."""
+    out = {
+        f"openfda:site{n}": Candidate(
+            name=f"Stryker Site {n}", source="openfda", source_ref=f"site{n}",
+            country="US", owner_ref="1811755",
+        )
+        for n in range(5)
+    }
+    calls: list[dict] = []
+
+    def _fetch(source, url, *, params=None, **kw):
+        calls.append(params)
+        return {"meta": {"results": {"total": 3364}}}, None
+
+    monkeypatch.setattr(dirmod, "fetch", _fetch)
+    dirmod._enrich_openfda_sizes(out, dirmod.BuildReport(), get_openfda_cfg())
+
+    assert len(calls) == 1
+    assert all(c.size_band_hint == "large" for c in out.values())
+
+
+def test_a_giant_is_then_dropped_by_the_existing_large_exclusion(session):
+    """The point of the whole exercise: Stryker leaves the research list."""
+    report = _build(session, [
+        Candidate(name="STRYKER PUERTO RICO, LLC.", source="openfda",
+                  source_ref="2648666", country="US", device_count=3364,
+                  device_count_is_floor=False, size_band_hint="large"),
+        Candidate(name="TECO DIAGNOSTICS", source="openfda", source_ref="1832216",
+                  country="US", device_count=207, device_count_is_floor=False,
+                  size_band_hint="medium"),
+    ])
+
+    assert report.skipped_wrong_size == 1
+    assert report.entries_added == 1
+    assert session.scalars(select(DirectoryEntry)).one().name == "TECO DIAGNOSTICS"
+
+
+def test_an_owner_we_cannot_resolve_is_left_unknown(session, monkeypatch):
+    """No total means no band. It does not mean zero, and it does not mean large."""
+    out = {
+        "openfda:x": Candidate(name="Mystery Inc", source="openfda",
+                               source_ref="x", country="US", owner_ref="999"),
+    }
+    monkeypatch.setattr(dirmod, "fetch", lambda *a, **k: ({"meta": {}}, None))
+    dirmod._enrich_openfda_sizes(out, dirmod.BuildReport(), get_openfda_cfg())
+
+    assert out["openfda:x"].size_band_hint is None
+
+
+def get_openfda_cfg() -> dict:
+    from signal_engine.config import get_config
+
+    return get_config().icp["openfda"]
 
 
 def test_the_ivd_regulation_parts_are_config_not_code():

@@ -72,9 +72,22 @@ class Candidate:
     examples: list[str] = field(default_factory=list)
     detail_url: str | None = None
 
+    # openFDA's owner/operator, the only key here that tracks corporate scale.
+    # A registration number counts one SITE, so a multi-site giant fragments into
+    # many small-looking establishments — Stryker's Puerto Rico site lists 67
+    # while TECO Diagnostics lists 190. Per owner they separate: 3364 vs 207.
+    owner_ref: str | None = None
+
+    # A band the source worked out for itself, on its own scale. openFDA counts
+    # listings; EUDAMED counts devices. Set here rather than derived by size_band()
+    # so the two units are never silently compared.
+    size_band_hint: str | None = None
+
     def merge(self, other: "Candidate") -> None:
         """Two keyword searches can find the same manufacturer. Keep the richer view."""
         self.country = self.country or other.country
+        self.owner_ref = self.owner_ref or other.owner_ref
+        self.size_band_hint = self.size_band_hint or other.size_band_hint
         self.highest_risk_class = _worst(self.highest_risk_class, other.highest_risk_class)
         self.keywords |= other.keywords
         for example in other.examples:
@@ -183,7 +196,9 @@ def build_directory(
             continue
         # An unknown country is NOT grounds for exclusion — absence of evidence.
 
-        band = size_band(
+        # A source that worked out its own band on its own scale wins; only the
+        # EUDAMED device-count path falls through to size_band().
+        band = candidate.size_band_hint or size_band(
             candidate.device_count, is_floor=candidate.device_count_is_floor
         )
         if target_bands and (band or "unknown") not in target_bands:
@@ -571,6 +586,78 @@ def _collect_openfda(
             if len(rows) < page_size:
                 break
 
+    # Sizes last, once every establishment is known, so each owner is asked about
+    # exactly once however many of its sites turned up.
+    _enrich_openfda_sizes(out, report, src)
+
+
+def listing_size_band(listings: int | None) -> str | None:
+    """Size from an openFDA OWNER's listing count. A separate scale from size_band().
+
+    size_band() counts EUDAMED device registrations; this counts US product
+    listings. Same words, different units — so they get different tables and are
+    never compared.
+    """
+    if listings is None:
+        return None
+    bands = (
+        get_config().icp.get("openfda", {}).get("size_bands", []) or []
+    )
+    for rule in bands:
+        ceiling = rule.get("max_listings")
+        if ceiling is None or listings <= int(ceiling):
+            return str(rule.get("name"))
+    return None
+
+
+def _enrich_openfda_sizes(
+    out: dict[str, Candidate], report: BuildReport, src: dict
+) -> None:
+    """Ask openFDA how many listings each OWNER holds, and set a real size band.
+
+    This is the one place any source can give a true total rather than a floor, so
+    it is the one place a size band below `large` can be trusted. One query per
+    distinct owner, not per company — a giant's many sites share one owner.
+
+    Everything it cannot resolve is left alone and stays unknown.
+    """
+    if not src.get("fetch_true_counts", True):
+        return
+
+    url = str(src.get("url", ""))
+    budget = int(src.get("max_count_lookups", 400))
+
+    owners: dict[str, list[Candidate]] = {}
+    for candidate in out.values():
+        if candidate.source == "openfda" and candidate.owner_ref:
+            owners.setdefault(candidate.owner_ref, []).append(candidate)
+
+    for owner, candidates in list(owners.items())[:budget]:
+        payload, error = fetch(
+            "openfda", url,
+            params={
+                "search": f'products.owner_operator_number:"{owner}"',
+                "limit": 1,
+            },
+        )
+        report.queries_made += 1
+        if error:
+            report.errors.append(error)
+            return
+        if not payload:
+            continue
+
+        total = (payload.get("meta", {}).get("results", {}) or {}).get("total")
+        if not total:
+            continue
+
+        band = listing_size_band(int(total))
+        for candidate in candidates:
+            candidate.device_count = int(total)
+            # A real total, not a floor — so the band below `large` is trustworthy.
+            candidate.device_count_is_floor = False
+            candidate.size_band_hint = band
+
 
 def _is_a_maker(row: dict, wanted_types: list[str]) -> bool:
     """Does this establishment actually make or design the device?
@@ -589,6 +676,10 @@ def _is_a_maker(row: dict, wanted_types: list[str]) -> bool:
     declared = row.get("establishment_type") or []
     if isinstance(declared, str):
         declared = [declared]
+    # openFDA sends [None], not [], when it has nothing to say. Stringifying that
+    # gives "none", which matches no wanted type and silently drops the row —
+    # turning "we don't know" into "excluded". Strip the empties first.
+    declared = [d for d in declared if d]
     if not declared:
         return True
 
@@ -609,20 +700,33 @@ def _absorb_openfda_row(
         return
 
     reg_number = (registration.get("registration_number") or "").strip()
-    key = f"openfda:{reg_number or normalise_name(name)}"
 
     proprietary = row.get("proprietary_name") or []
     if isinstance(proprietary, str):
         proprietary = [proprietary]
     examples = [str(p).strip() for p in proprietary[:3] if str(p).strip()]
 
+    products = row.get("products") or []
+    owner_ref = None
+    for product in products:
+        owner_ref = (product or {}).get("owner_operator_number")
+        if owner_ref:
+            owner_ref = str(owner_ref).strip() or None
+            break
+
+    # Identity is the OWNER, not the site. Sterigenics registers eight US
+    # establishments; the directory is one row per company, not per address.
+    identity = owner_ref or reg_number or normalise_name(name)
+    key = f"openfda:{identity}"
+
     candidate = Candidate(
         name=name,
         source="openfda",
-        source_ref=reg_number or normalise_name(name),
+        source_ref=identity,
         country=country,
         device_count=1,
         device_count_is_floor=True,
+        owner_ref=owner_ref,
         keywords={f"21 CFR {part}"},
         examples=examples,
         detail_url=(
