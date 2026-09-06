@@ -163,6 +163,8 @@ def directory(
     territory: str | None = None,
     keyword: str | None = None,
     size: str | None = None,
+    q: str | None = None,
+    letter: str | None = None,
     show_dismissed: int = 0,
     page: int = 1,
 ):
@@ -174,6 +176,8 @@ def directory(
             territory=territory or None,
             keyword=keyword or None,
             size=size or None,
+            query=q or None,
+            letter=letter or None,
             include_dismissed=bool(show_dismissed),
             page=page,
         ),
@@ -188,6 +192,8 @@ def directory(
             territory=territory or "",
             keyword=keyword or "",
             size=size or "",
+            q=q or "",
+            letter=letter or "",
             show_dismissed=show_dismissed,
         ),
     )

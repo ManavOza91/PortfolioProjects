@@ -51,6 +51,34 @@ def test_eu_and_us_directory_sweeps_are_separate_buttons():
     assert specs["directory-us"]["sources"] == ["openfda"]
 
 
+def test_buttons_still_appear_when_config_predates_the_feature(monkeypatch):
+    """The updater never overwrites config.yaml, so an old one must not break this.
+
+    A config written before ui.jobs existed left the Tasks page completely empty
+    with nothing explaining why.
+    """
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().raw, "ui", {})
+    jobs.reset()
+
+    keys = [j.key for j in jobs.all_jobs()]
+    assert keys == ["detect", "directory-eu", "directory-us"]
+    assert jobs.using_fallback_jobs()
+
+
+def test_config_wins_over_the_fallback(monkeypatch):
+    from signal_engine.config import get_config
+
+    monkeypatch.setitem(get_config().raw, "ui", {
+        "jobs": [{"key": "detect", "label": "Mine", "action": "detect"}]
+    })
+    jobs.reset()
+
+    assert [j.label for j in jobs.all_jobs()] == ["Mine"]
+    assert not jobs.using_fallback_jobs()
+
+
 def test_an_unknown_job_is_refused_by_name():
     with pytest.raises(jobs.JobRefused):
         jobs.start("not-a-job")

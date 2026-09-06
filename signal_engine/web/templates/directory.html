@@ -42,6 +42,13 @@
           style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; padding:14px 16px">
       {# Keep the current region when the other filters are applied. #}
       <input type="hidden" name="region" value="{{ region }}">
+
+      <label style="display:block">
+        <span class="small muted">Search by name</span><br>
+        <input type="search" name="q" value="{{ q }}" placeholder="e.g. diagnostics"
+               style="min-width:190px">
+      </label>
+
       <label style="display:block">
         <span class="small muted">Territory</span><br>
         <select name="territory">
@@ -79,22 +86,51 @@
       </label>
 
       <button type="submit">Filter</button>
-      {% if territory or keyword or size or show_dismissed %}
-        <a class="small muted" href="/directory">Clear</a>
+      {% if territory or keyword or size or show_dismissed or q or letter %}
+        <a class="small muted" href="/directory{{ '?region=' ~ region if region }}">Clear</a>
       {% endif %}
     </form>
+
+    {# Jump straight to a letter. Only letters that have entries are shown, so no
+       click can land on an empty page. #}
+    {% if result.letters %}
+      {% set base = 'region=' ~ region ~ '&territory=' ~ territory ~ '&keyword=' ~ keyword ~ '&size=' ~ size ~ '&q=' ~ q %}
+      <div style="display:flex; gap:4px; flex-wrap:wrap; padding:0 16px 14px">
+        <a href="/directory?{{ base }}" class="pill {{ 'ok' if not letter }}">All</a>
+        {% for L in result.letters %}
+          <a href="/directory?{{ base }}&letter={{ L }}"
+             class="pill {{ 'ok' if letter|upper == L }}">{{ L }}</a>
+        {% endfor %}
+      </div>
+    {% endif %}
   </div>
 </div>
 
 <div class="panel">
-  <div class="panel-head">
-    <strong>{{ result.total }}</strong> matching
-    {{ 'company' if result.total == 1 else 'companies' }}
+  {% set q_all = 'region=' ~ region ~ '&territory=' ~ territory ~ '&keyword=' ~ keyword ~ '&size=' ~ size ~ '&q=' ~ q ~ '&letter=' ~ letter ~ '&show_dismissed=' ~ show_dismissed %}
+  {% macro pager() %}
     {% if result.pages > 1 %}
-      <span class="small muted">&middot; page {{ result.page }} of {{ result.pages }}</span>
+      <div style="display:flex; gap:12px; align-items:center; padding:10px 16px">
+        {% if result.page > 1 %}
+          <a href="/directory?{{ q_all }}&page=1">&laquo; First</a>
+          <a href="/directory?{{ q_all }}&page={{ result.page - 1 }}">&larr; Previous</a>
+        {% endif %}
+        <span class="small muted">page {{ result.page }} of {{ result.pages }}</span>
+        {% if result.page < result.pages %}
+          <a href="/directory?{{ q_all }}&page={{ result.page + 1 }}">Next &rarr;</a>
+          <a href="/directory?{{ q_all }}&page={{ result.pages }}">Last &raquo;</a>
+        {% endif %}
+      </div>
     {% endif %}
-    <span class="small muted">&middot; listed alphabetically — there is no ranking here</span>
+  {% endmacro %}
+
+  <div class="panel-head">
+    Showing <strong>{{ result.first_index }}&ndash;{{ result.last_index }}</strong>
+    of <strong>{{ result.total }}</strong>
+    {{ 'company' if result.total == 1 else 'companies' }}
+    <span class="small muted">&middot; alphabetical — there is no ranking here</span>
   </div>
+  {{ pager() }}
 
   <div class="panel-body tight">
     {% if result.entries %}
@@ -153,17 +189,7 @@
     {% endif %}
   </div>
 
-  {% if result.pages > 1 %}
-    <div class="panel-body tight" style="padding:12px 16px; display:flex; gap:12px">
-      {% set q = 'region=' ~ region ~ '&territory=' ~ territory ~ '&keyword=' ~ keyword ~ '&size=' ~ size ~ '&show_dismissed=' ~ show_dismissed %}
-      {% if result.page > 1 %}
-        <a href="/directory?{{ q }}&page={{ result.page - 1 }}">&larr; Previous</a>
-      {% endif %}
-      {% if result.page < result.pages %}
-        <a href="/directory?{{ q }}&page={{ result.page + 1 }}">Next &rarr;</a>
-      {% endif %}
-    </div>
-  {% endif %}
+  {{ pager() }}
 </div>
 
 {% endblock %}

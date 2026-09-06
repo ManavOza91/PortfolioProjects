@@ -586,6 +586,75 @@ def test_the_page_is_capped_so_a_list_of_800_is_never_dumped(session):
     assert len(browse(session, DirectoryFilters(page=2)).entries) == 15
 
 
+def test_searching_by_name(session):
+    """A thousand entries is not navigable by paging to the bottom."""
+    _entry(session, "Northwind Diagnostics", country="GB")
+    _entry(session, "Southgate Reagents", country="GB")
+
+    result = browse(session, DirectoryFilters(query="northwind"))
+    assert [e.name for e in result.entries] == ["Northwind Diagnostics"]
+    assert result.total == 1
+
+
+def test_search_is_case_insensitive_and_matches_mid_name(session):
+    _entry(session, "Acme Diagnostics Group", country="GB")
+
+    assert browse(session, DirectoryFilters(query="DIAGNOSTICS")).total == 1
+    assert browse(session, DirectoryFilters(query="nostics gr")).total == 1
+
+
+def test_jumping_to_a_letter(session):
+    _entry(session, "Alpha Assays", country="GB")
+    _entry(session, "Beta Bio", country="GB")
+    _entry(session, "beta lowercase", country="GB")
+
+    result = browse(session, DirectoryFilters(letter="B"))
+    assert sorted(e.name for e in result.entries) == ["Beta Bio", "beta lowercase"]
+
+
+def test_only_letters_with_entries_are_offered(session):
+    """Every letter shown must lead somewhere — no dead clicks."""
+    _entry(session, "Alpha Assays", country="GB")
+    _entry(session, "Zeta Reagents", country="GB")
+
+    assert browse(session).letters == ["A", "Z"]
+
+
+def test_the_letter_strip_respects_the_region_tab(session):
+    _entry(session, "American Assays", country="US")
+    _entry(session, "Zeta Reagents", country="DE")
+
+    assert browse(session, DirectoryFilters(region="US")).letters == ["A"]
+
+
+def test_search_composes_with_region_and_size(session):
+    _entry(session, "Northwind Diagnostics GmbH", country="DE", device_count=3)
+    _entry(session, "Northwind Diagnostics Inc", country="US", device_count=3)
+
+    result = browse(session, DirectoryFilters(query="northwind", region="EU"))
+    assert result.total == 1
+    assert result.entries[0].country == "DE"
+
+
+def test_the_page_reports_which_slice_you_are_looking_at(session):
+    from signal_engine.config import get_config
+
+    per_page = int(get_config().icp["page_size_display"])
+    for n in range(per_page + 10):
+        _entry(session, f"Company {n:03d}", country="GB")
+
+    first = browse(session)
+    assert (first.first_index, first.last_index) == (1, per_page)
+
+    second = browse(session, DirectoryFilters(page=2))
+    assert (second.first_index, second.last_index) == (per_page + 1, per_page + 10)
+
+
+def test_an_empty_directory_reports_a_sane_range(session):
+    page = browse(session)
+    assert (page.first_index, page.last_index, page.total) == (0, 0, 0)
+
+
 def test_dismissing_an_entry_hides_it_without_deleting_it(session):
     entry = _entry(session, "Not For Us", country="GB")
 

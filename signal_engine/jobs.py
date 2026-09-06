@@ -85,9 +85,50 @@ class Job:
 # ---------------------------------------------------------------------------
 
 
+# What the buttons are when config says nothing about them.
+#
+# This is a fallback, not a default to design around: `ui.jobs` in config.yaml
+# overrides it entirely, and that is where a customer relabels or regroups them.
+# It exists because config.yaml is deliberately NOT overwritten when the app
+# updates — the right call, since it holds your territories and thresholds — and
+# without this a config written before a feature existed would silently remove
+# that feature's buttons and leave an empty page with no explanation.
+#
+# Nothing here names a product, a signal type or a threshold. Register names and
+# the two code paths are mechanism, which is why they can live in code at all.
+FALLBACK_JOBS: list[dict] = [
+    {
+        "key": "detect",
+        "label": "Check for new signals",
+        "blurb": "Looks for new regulatory filings and press on the companies you track.",
+        "action": "detect",
+    },
+    {
+        "key": "directory-eu",
+        "label": "Refresh EU/UK directory",
+        "blurb": "Walks EUDAMED and MHRA. Slow — tens of minutes.",
+        "action": "directory",
+        "sources": ["eudamed", "mhra"],
+    },
+    {
+        "key": "directory-us",
+        "label": "Refresh US directory",
+        "blurb": "Walks openFDA. Minutes, not hours — it filters by country at source.",
+        "action": "directory",
+        "sources": ["openfda"],
+    },
+]
+
+
 def job_specs() -> list[dict]:
-    """The buttons, from config. Labels and sources are data, not code."""
-    return list(get_config().raw.get("ui", {}).get("jobs", []) or [])
+    """The buttons. From config where set, otherwise the fallback above."""
+    configured = list(get_config().raw.get("ui", {}).get("jobs", []) or [])
+    return configured or [dict(spec) for spec in FALLBACK_JOBS]
+
+
+def using_fallback_jobs() -> bool:
+    """True when config has nothing to say — the page mentions it quietly."""
+    return not (get_config().raw.get("ui", {}).get("jobs") or [])
 
 
 def _spec(key: str) -> dict | None:

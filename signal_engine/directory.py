@@ -819,6 +819,10 @@ class DirectoryFilters:
     territory: str | None = None
     keyword: str | None = None
     size: str | None = None
+    # Free-text on the company name, and a single initial letter. With a thousand
+    # entries, paging to the bottom and clicking Next is not navigation.
+    query: str | None = None
+    letter: str | None = None
     include_dismissed: bool = False
     page: int = 1
 
@@ -835,6 +839,15 @@ class DirectoryPage:
     sizes: list[str]
     region: str | None = None
     region_counts: dict[str, int] = field(default_factory=dict)
+    letters: list[str] = field(default_factory=list)
+
+    @property
+    def first_index(self) -> int:
+        return 0 if not self.total else (self.page - 1) * self.per_page + 1
+
+    @property
+    def last_index(self) -> int:
+        return min(self.page * self.per_page, self.total)
 
 
 def browse(
@@ -875,6 +888,10 @@ def browse(
             where.append(DirectoryEntry.size_band.is_(None))
         else:
             where.append(DirectoryEntry.size_band == filters.size)
+    if filters.query:
+        where.append(DirectoryEntry.name.ilike(f"%{filters.query.strip()}%"))
+    if filters.letter:
+        where.append(DirectoryEntry.name.ilike(f"{filters.letter.strip()[:1]}%"))
 
     total = int(session.scalar(
         select(func.count()).select_from(DirectoryEntry).where(*where)
@@ -902,7 +919,20 @@ def browse(
         sizes=[str(b.get("name")) for b in cfg.icp.get("size_bands", []) or []] + ["unknown"],
         region=filters.region,
         region_counts=region_counts,
+        # Only letters that actually have entries, so no click leads to an empty page.
+        letters=_letters_present(session, base + (
+            [_region_clause(filters.region)] if filters.region else []
+        )),
     )
+
+
+def _letters_present(session: Session, where: list) -> list[str]:
+    rows = session.scalars(
+        select(func.upper(func.substr(DirectoryEntry.name, 1, 1)))
+        .where(*where)
+        .distinct()
+    )
+    return sorted({r for r in rows if r and r.isalpha()})
 
 
 def _distinct_territories(session: Session, tenant_id: int) -> list[str]:

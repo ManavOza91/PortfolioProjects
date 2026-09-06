@@ -7,7 +7,7 @@ watchlists, never fetch queues. Output is a ranked company queue with a stated r
 finding the right person is a manual step the user does themselves.
 
 **Heading for multi-tenant SaaS** sold to other life science instrument companies —
-see load-bearing decision 14 before adding anything.
+see load-bearing decision 15 before adding anything.
 
 ## Working rules (user is on a Pro plan with a 5-hour limit — respect these)
 
@@ -128,7 +128,15 @@ SBIR was **removed** (US-only, permanently `TooManyRequestsError` at source).
     Classes A–D are IVDs; I/IIa/IIb/III are MDR. There is no country, category
     or legislation filter that works — trade-name search finds almost nothing
     because trade names are brand names. Don't replace the sweep with keywords.
-14. **Nothing about THIS user's business may live in code.** This is heading for
+14. **A new feature must not depend on a new config key existing.** The updater
+    never overwrites `config.yaml` — it holds the user's territories, ICP and
+    thresholds — so every install runs a config older than the code. `ui.jobs`
+    shipped without a fallback and the Tasks page rendered with no buttons and no
+    explanation. Read new keys with a fallback that keeps the feature working
+    (`jobs.FALLBACK_JOBS`), and let config override it. This does not license
+    business defaults: the fallback may describe mechanism (register names, code
+    paths), never products, signal types, keywords or thresholds — see 15.
+15. **Nothing about THIS user's business may live in code.** This is heading for
     multi-tenant SaaS sold to other life science instrument companies, so the
     freeze-drying microscope, the lyobead generator, the 14 signal types, the
     detection keywords, the ICP criteria and every scoring threshold are one
