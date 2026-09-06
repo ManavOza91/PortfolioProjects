@@ -44,6 +44,13 @@ EUDAMED_UI = (
 MHRA_URL = "https://pard.mhra.gov.uk/searchManufacturers"
 MHRA_UI = "https://pard.mhra.gov.uk/manufacturer-details/"
 
+# The registers this module can walk, and what to call them on screen.
+DIRECTORY_SOURCES = {
+    "eudamed": "EUDAMED (EU device registrations)",
+    "mhra": "MHRA PARD (UK device registrations)",
+    "openfda": "openFDA (US device registrations)",
+}
+
 _RISK_ORDER = ["class-i", "class-iia", "class-iib", "class-iii"]
 
 # EUDAMED encodes the manufacturer's country in the SRN: "DE-MF-000032990".

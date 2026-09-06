@@ -163,21 +163,39 @@ def cmd_detect(args) -> int:
 
 
 def cmd_directory(args) -> int:
+    from .config import get_config
     from .db import session_scope
-    from .directory import build_directory
+    from .directory import DIRECTORY_SOURCES, build_directory
 
     _ensure_ready()
 
-    print(
-        "Walking the EU and UK device registers. This is slow — EUDAMED pages a\n"
-        "three-million-row table — so expect several minutes.\n"
-    )
+    sources = args.source or list(get_config().icp.get("sources", DIRECTORY_SOURCES))
+    unknown = [s for s in sources if s not in DIRECTORY_SOURCES]
+    if unknown:
+        print(
+            f"Unknown source(s): {', '.join(unknown)}. "
+            f"Available: {', '.join(DIRECTORY_SOURCES)}."
+        )
+        return 1
+
+    # Name the registers actually being walked. A fixed banner claiming "EU and
+    # UK" while --source openfda ran was worse than no banner: it made a correct
+    # command look broken.
+    print(f"Walking: {', '.join(DIRECTORY_SOURCES[s] for s in sources)}.")
+    if "eudamed" in sources:
+        print(
+            "EUDAMED pages a three-million-row table, so expect this to take a "
+            "while — tens of minutes."
+        )
+    else:
+        print("No EUDAMED in this run, so it should take minutes rather than an hour.")
+    print()
 
     with session_scope() as session:
         report = build_directory(
             session,
             keywords=args.keyword or None,
-            sources=args.source or None,
+            sources=sources,
             dry_run=args.dry_run,
         )
         print()
