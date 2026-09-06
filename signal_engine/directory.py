@@ -156,7 +156,13 @@ def build_directory(
     sources: list[str] | None = None,
     dry_run: bool = False,
     tenant_id: int | None = None,
+    report: BuildReport | None = None,
 ) -> BuildReport:
+    """Pass `report` to watch a running sweep from another thread.
+
+    The counters are updated in place as the sweep proceeds, which is how the
+    Tasks page shows a real query count instead of an unmoving spinner.
+    """
     cfg = get_config()
     icp = cfg.icp
     tenant_id = tenant_id if tenant_id is not None else cfg.tenant_id
@@ -169,7 +175,10 @@ def build_directory(
     sources = (
         list(icp.get("sources", ["eudamed", "mhra"])) if sources is None else list(sources)
     )
-    report = BuildReport(dry_run=dry_run)
+    if report is None:
+        report = BuildReport(dry_run=dry_run)
+    else:
+        report.dry_run = dry_run
 
     candidates: dict[str, Candidate] = {}
 

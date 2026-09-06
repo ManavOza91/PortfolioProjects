@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty %}
+{% set nav = "tasks" %}
+{% block title %}Tasks — Signal Engine{% endblock %}
+
+{% block head %}
+  {# While something is running, ask the browser to come back in 5 seconds.
+     A meta refresh rather than JavaScript: no build step, works offline. #}
+  {% if busy %}<meta http-equiv="refresh" content="5">{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <div>
+    <h1>Tasks</h1>
+    <div class="sub">
+      Everything that used to need a terminal. Press a button, leave the page open,
+      and the result appears here when it's done.
+    </div>
+  </div>
+</div>
+
+{% if busy %}
+  <div class="panel">
+    <div class="panel-body tight">
+      <div style="padding:14px 16px">
+        <strong>{{ busy.label }}</strong> is running —
+        {{ busy.elapsed_human }} elapsed{% if busy.progress %}, {{ busy.progress }}{% endif %}.
+        <div class="small muted" style="margin-top:4px">
+          This page is refreshing itself every 5 seconds. You can leave it open, or
+          come back later — the job keeps going either way, as long as the app stays
+          running.
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+{% for job in jobs %}
+  <div class="panel">
+    <h2>
+      {{ job.label }}
+      <span class="spacer" style="flex:1"></span>
+      {% if job.running %}
+        <span class="pill warn">running</span>
+      {% elif job.status == 'done' %}
+        <span class="pill ok">finished in {{ job.elapsed_human }}</span>
+      {% elif job.status == 'failed' %}
+        <span class="pill warn">failed</span>
+      {% endif %}
+    </h2>
+    <div class="panel-body tight">
+      <div style="padding:14px 16px">
+        <div class="small muted">{{ job.blurb }}</div>
+
+        <form method="post" action="/tasks/{{ job.key }}" style="margin-top:10px">
+          <button type="submit" {{ 'disabled' if busy }}>
+            {% if job.running %}Running…{% else %}{{ job.label }}{% endif %}
+          </button>
+          {% if busy and not job.running %}
+            <span class="small muted" style="margin-left:8px">
+              waiting for {{ busy.label }} to finish
+            </span>
+          {% endif %}
+        </form>
+
+        {% if job.error %}
+          <div class="small" style="margin-top:12px">
+            <strong>It failed.</strong> Nothing was left half-written — whatever the
+            run had already saved is saved, and the rest simply didn't happen.
+          </div>
+          <pre style="margin-top:8px; overflow-x:auto; font-size:12px; background:var(--bg2);
+                      padding:10px; border-radius:4px">{{ job.error }}</pre>
+        {% elif job.result %}
+          <pre style="margin-top:12px; overflow-x:auto; font-size:12px; background:var(--bg2);
+                      padding:10px; border-radius:4px">{{ job.result }}</pre>
+        {% elif not job.running %}
+          <div class="small muted" style="margin-top:10px">Not run yet this session.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endfor %}
+
+<div class="panel">
+  <div class="panel-body tight">
+    <div class="small muted" style="padding:14px 16px">
+      <strong>Two things worth knowing.</strong>
+      One job runs at a time — they write to the same database file, and queuing
+      them is simpler than making concurrent writes safe for a tool with one user.
+      And results live in memory: closing the app mid-run stops the job and loses
+      the summary. Nothing is corrupted if that happens, because whatever the run
+      had already written was written as it went.
+    </div>
+  </div>
+</div>
+
+{% endblock %}

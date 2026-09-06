@@ -14,6 +14,7 @@
       when you have time to research; work the queue when you don't.
     </div>
   </div>
+  <a href="/tasks" class="btn">Refresh the directory</a>
 </div>
 
 {# Region tabs. These slice the DIRECTORY only — the signalled queue has its own
@@ -148,7 +149,7 @@
         </div>
       {% endfor %}
     {% else %}
-      {{ empty("Nothing matches those filters. Run <code>./run.sh directory-refresh</code> to build the directory, or widen the filters.") }}
+      {{ empty("Nothing matches those filters. Build the directory from the Tasks page, or widen the filters.") }}
     {% endif %}
   </div>
 

@@ -36,6 +36,7 @@ from ..ingest import (
     log_activity,
     upsert_contact,
 )
+from ..jobs import JobRefused, all_jobs, anything_running, start as start_job
 from ..llm.client import api_key_present
 from ..models import Activity, Company, Contact, ManagerInsight, Signal, SignalType
 from ..reporting import (
@@ -128,6 +129,30 @@ def dashboard(request: Request, db: DbSession):
             directory_count=directory_total(db),
         ),
     )
+
+
+@app.get("/tasks", response_class=HTMLResponse)
+def tasks(request: Request, db: DbSession):
+    """Run the long jobs without a terminal.
+
+    The page refreshes itself while something is running — a meta refresh, not
+    JavaScript, because this app has no build step and must work offline.
+    """
+    jobs = all_jobs()
+    return templates.TemplateResponse(
+        request,
+        "tasks.html",
+        _ctx(request, jobs=jobs, busy=anything_running()),
+    )
+
+
+@app.post("/tasks/{key}")
+def tasks_run(db: DbSession, key: str):
+    try:
+        job = start_job(key)
+    except JobRefused as refusal:
+        return _redirect("/tasks", str(refusal), kind="warn")
+    return _redirect("/tasks", f"{job.label} started.")
 
 
 @app.get("/directory", response_class=HTMLResponse)

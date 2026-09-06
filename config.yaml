@@ -444,6 +444,32 @@ icp:
   page_size_display: 50
 
 # ---------------------------------------------------------------------------
+# Buttons on the Tasks page. Everything here is data: the label you see, and
+# which registers the button sweeps. `action` picks one of two code paths and is
+# the only part that is not yours to change — 'detect' looks for signals on
+# companies you already track, 'directory' walks registers for ICP matches.
+#
+# One job runs at a time. They share a SQLite file, and two sweeps writing at
+# once is not worth the trouble for a tool with one user.
+# ---------------------------------------------------------------------------
+ui:
+  jobs:
+    - key: "detect"
+      label: "Check for new signals"
+      blurb: "Looks for new regulatory filings and press on the companies you track."
+      action: "detect"
+    - key: "directory-eu"
+      label: "Refresh EU/UK directory"
+      blurb: "Walks EUDAMED and MHRA. Slow — tens of minutes."
+      action: "directory"
+      sources: ["eudamed", "mhra"]
+    - key: "directory-us"
+      label: "Refresh US directory"
+      blurb: "Walks openFDA. Minutes, not hours — it filters by country at source."
+      action: "directory"
+      sources: ["openfda"]
+
+# ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
 server:

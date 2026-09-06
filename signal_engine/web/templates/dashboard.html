@@ -138,9 +138,8 @@
       </div>
     {% else %}
       {{ empty('The directory is empty.',
-               'Run <code>./run.sh directory-refresh</code> to build it from the EU and UK
-                device registers. It is a slow batch job — several minutes — and it never
-                touches your queue.') }}
+               'Build it from the <a href="/tasks">Tasks</a> page — it walks the EU, UK and
+                US device registers. A slow batch job, and it never touches your queue.') }}
     {% endif %}
   </div>
 </div>

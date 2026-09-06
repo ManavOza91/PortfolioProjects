@@ -14,24 +14,27 @@ you perform yourself, and it is the step that produces your best outreach.
 
 ## Running it
 
-**Windows** — open PowerShell in this folder and run:
+**On Windows, without a terminal:** double-click **Start Signal Engine.bat**. A
+console window appears — that window *is* the app; leave it open and use the
+browser, close it to stop. Right-click the .bat → Send to → Desktop to get a
+shortcut. **Update Signal Engine.bat** fetches the latest code and leaves your
+`config.yaml` and database untouched.
 
-```powershell
-.\run.ps1
-```
+Everything the terminal did is also on the **Tasks** page in the app: detection
+and directory refreshes are buttons, with live progress and the run summary.
 
-**macOS or Linux** — open Terminal in this folder and run:
+<details>
+<summary>Running it from a terminal instead</summary>
 
-```bash
-./run.sh
-```
+**Windows** — open PowerShell in this folder and run `.\run.ps1`.
+**macOS or Linux** — open Terminal in this folder and run `./run.sh`.
+
+Both are equivalent, and every command in the table below works with either.
+</details>
 
 That is the whole thing. It installs everything it needs (including `uv` and Python
 on Windows), creates the database, seeds the signal taxonomy, and opens
 <http://127.0.0.1:8420> in your browser.
-
-The two runners are equivalent — every command below works with either. Substitute
-`.\run.ps1` for `./run.sh` on Windows.
 
 **No API key needed, and no ongoing cost.** You record signals on a form: pick the
 company, pick the signal from the taxonomy, set the date and timeline. The weight comes

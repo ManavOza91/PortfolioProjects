@@ -35,6 +35,7 @@ SQLite via SQLAlchemy 2.0 + Alembic, Anthropic SDK with `messages.parse()`.
 | `signal_engine/ingest.py` | Write path: notes → companies/signals/contacts/activity |
 | `signal_engine/llm/parser.py` | Prompt + dynamic Pydantic schema built from taxonomy |
 | `signal_engine/detect/` | Auto-detection; one module per source + `runner.py` (all judgement) |
+| `signal_engine/jobs.py` | Background jobs behind the Tasks page buttons |
 | `signal_engine/directory.py` | ICP research directory — separate table, no scores, no rank |
 | `signal_engine/reporting.py` | Read path for the dashboard |
 | `signal_engine/web/` | FastAPI app, templates, CSS |
@@ -44,6 +45,12 @@ SQLite via SQLAlchemy 2.0 + Alembic, Anthropic SDK with `messages.parse()`.
 Commands: `./run.sh` (or `.\run.ps1` on Windows) — also `demo`, `seed`, `rescore`,
 `import [--dry-run]`, `detect [--dry-run|--source|--since|--backfill|--discover]`, `parser-check`,
 `directory-refresh [--dry-run|--keyword|--source]`, `export-portable`, `purge-contacts`, `test`.
+
+**The user does not use a terminal.** `detect` and `directory-refresh` are buttons on
+the Tasks page (`signal_engine/jobs.py`, config `ui.jobs`); Windows gets
+`Start Signal Engine.bat` and `Update Signal Engine.bat`. Anything new that would
+otherwise need a command needs a button too, and the updater must never overwrite
+`config.yaml` or `data/`.
 
 ## Built vs not
 
