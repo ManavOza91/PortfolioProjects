@@ -244,6 +244,17 @@ def cmd_serve(args) -> int:
     port = args.port or int(cfg.server.get("port", 8420))
     url = f"http://{host}:{port}"
 
+    if _port_is_taken(host, port):
+        print()
+        print("  Signal Engine is already running in another window.")
+        print(f"  Open {url} — that is the copy that's live.")
+        print()
+        print("  If you've just updated, that running copy is still the OLD code,")
+        print("  which is why new buttons and pages won't appear. Close every")
+        print("  Signal Engine window, then start it again.")
+        print()
+        return 1
+
     taxonomy = get_taxonomy()
     print()
     print(f"  Signal Engine — {len(taxonomy.types)} signal types loaded ({seed_result.summary()})")
@@ -260,6 +271,22 @@ def cmd_serve(args) -> int:
 
     uvicorn.run("signal_engine.web.app:app", host=host, port=port, log_level="warning")
     return 0
+
+
+def _port_is_taken(host: str, port: int) -> bool:
+    """Is something already listening there?
+
+    Checked before uvicorn starts, because uvicorn handles the bind failure itself
+    and prints "[Errno 10048] ... only one usage of each socket address is normally
+    permitted", which reads as a crash. It almost always means the app is already
+    open in another window — and that older window goes on serving the OLD code,
+    so an update appears to have done nothing at all.
+    """
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.5)
+        return probe.connect_ex((host, port)) == 0
 
 
 def build_parser() -> argparse.ArgumentParser:
